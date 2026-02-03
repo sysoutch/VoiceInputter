@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import requests
 import websocket
 import wave
@@ -14,9 +15,15 @@ class ComfyClient:
 
     def load_workflow(self):
         try:
-            with open(WORKFLOW_FILE, 'r', encoding='utf-8') as f:
+            # Handle PyInstaller path
+            if hasattr(sys, '_MEIPASS'):
+                wf_path = os.path.join(sys._MEIPASS, WORKFLOW_FILE)
+            else:
+                wf_path = WORKFLOW_FILE
+            
+            with open(wf_path, 'r', encoding='utf-8') as f:
                 wf = json.load(f)
-            self.logger.info(f"Loaded workflow from {WORKFLOW_FILE}")
+            self.logger.info(f"Loaded workflow from {wf_path}")
             return wf
         except Exception as e:
             self.logger.error(f"Failed to load workflow file: {e}")

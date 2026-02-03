@@ -6,3 +6,8 @@ input_audio.wav
 .env
 venv/
 .vscode/
+# Build artifacts
+build/
+dist/
+*.spec
+*.exe

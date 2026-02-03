@@ -1,0 +1,9 @@
+numpy
+sounddevice
+websocket-client
+requests
+pynput
+pyautogui
+pyperclip
+pygetwindow
+pyinstaller
