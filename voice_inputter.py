@@ -40,19 +40,24 @@ class VoiceInputter:
         self.sample_rate = 16000
         
         self.queue = queue.Queue()
+        self.current_keys = set()
         
         # Audio Control Flags
         self.manual_stop_event = threading.Event()
         self.manual_start_event = threading.Event()
         
-        # VAD Settings
+        # VAD Settings (Internal state updated from UI)
         self.use_auto_stop = True
         self.use_voice_trigger = False
+        
+        # Dragging State
+        self.drag_data = {"x": 0, "y": 0}
         
         # UI Setup
         self.root = tk.Tk()
         self.vad_auto_stop_var = tk.BooleanVar(value=True)
         self.vad_trigger_var = tk.BooleanVar(value=False)
+        self.auto_enter_var = tk.BooleanVar(value=True)
         self.setup_overlay()
 
         # Load workflow
@@ -72,30 +77,71 @@ class VoiceInputter:
         """Configures the Tkinter overlay window."""
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
-        self.root.attributes('-alpha', 0.8)
+        self.root.attributes('-alpha', 0.9)
         
         screen_width = self.root.winfo_screenwidth()
-        self.root.geometry(f"220x130+{screen_width-240}+20")
+        self.root.geometry(f"250x300+{screen_width-280}+50")
         
+        # Bind dragging
+        self.root.bind("<Button-1>", self.start_drag)
+        self.root.bind("<B1-Motion>", self.do_drag)
+        
+        # Frame
         self.frame = tk.Frame(self.root, bg="#333333")
         self.frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Make frame draggable too
+        self.frame.bind("<Button-1>", self.start_drag)
+        self.frame.bind("<B1-Motion>", self.do_drag)
 
+        # Status Label
         self.label = tk.Label(self.frame, text="Ready", font=("Arial", 12, "bold"), bg="#333333", fg="white")
         self.label.pack(pady=(5, 5))
+        self.label.bind("<Button-1>", self.start_drag)
+        self.label.bind("<B1-Motion>", self.do_drag)
         
+        # Main Button
         self.action_btn = tk.Button(self.frame, text="RECORD", command=self.manual_toggle, bg="#4CAF50", fg="white", font=("Arial", 10, "bold"))
-        self.action_btn.pack(pady=(0, 5))
+        self.action_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
         
-        # Toggles
-        self.chk_auto_stop = tk.Checkbutton(self.frame, text="Auto-Stop (VAD)", var=self.vad_auto_stop_var, command=self.update_settings,
+        # Text Area
+        self.text_area = tk.Text(self.frame, height=5, width=25, font=("Arial", 10))
+        self.text_area.pack(pady=5, padx=10)
+        
+        # Send Button
+        self.send_btn = tk.Button(self.frame, text="SEND", command=self.manual_send, bg="#2196F3", fg="white", font=("Arial", 9, "bold"))
+        self.send_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
+        
+        # Options
+        opts_frame = tk.Frame(self.frame, bg="#333333")
+        opts_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.chk_auto_stop = tk.Checkbutton(opts_frame, text="Auto-Stop", var=self.vad_auto_stop_var, command=self.update_settings,
                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
-        self.chk_auto_stop.pack(anchor="w", padx=10)
+        self.chk_auto_stop.pack(anchor="w")
         
-        self.chk_voice_trigger = tk.Checkbutton(self.frame, text="Record on Voice Input", var=self.vad_trigger_var, command=self.update_settings,
+        self.chk_voice_trigger = tk.Checkbutton(opts_frame, text="Record on Voice Input", var=self.vad_trigger_var, command=self.update_settings,
                                                 bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
-        self.chk_voice_trigger.pack(anchor="w", padx=10)
+        self.chk_voice_trigger.pack(anchor="w")
+
+        self.chk_auto_enter = tk.Checkbutton(opts_frame, text="Auto-Enter", var=self.auto_enter_var,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_auto_enter.pack(anchor="w")
+        
+        # Close
+        self.close_btn = tk.Button(self.frame, text="x", command=self.quit_app, bg="#333333", fg="white", font=("Arial", 8), bd=0)
+        self.close_btn.place(relx=1.0, x=-2, y=0, anchor="ne")
         
         self.update_ui_state("READY")
+
+    def start_drag(self, event):
+        self.drag_data["x"] = event.x
+        self.drag_data["y"] = event.y
+
+    def do_drag(self, event):
+        x = self.root.winfo_x() - self.drag_data["x"] + event.x
+        y = self.root.winfo_y() - self.drag_data["y"] + event.y
+        self.root.geometry(f"+{x}+{y}")
 
     def update_settings(self):
         self.use_auto_stop = self.vad_auto_stop_var.get()
@@ -122,14 +168,33 @@ class VoiceInputter:
         elif self.state == "READY":
             self.manual_start_event.set()
 
+    def manual_send(self):
+        text = self.text_area.get("1.0", tk.END).strip()
+        if text:
+            self.send_text_to_window(text)
+            # Clear logic? User might want to keep it?
+            # Usually send clears it.
+            self.text_area.delete("1.0", tk.END)
+
     def process_queue(self):
         try:
             while True:
                 msg = self.queue.get_nowait()
-                if isinstance(msg, tuple) and msg[0] == "ui":
-                    self.update_ui_state(msg[1])
+                if isinstance(msg, tuple):
+                    cmd, arg = msg
+                    if cmd == "ui":
+                        self.update_ui_state(arg)
+                    elif cmd == "audio_state":
+                        self.state = arg # Sync state
+                        self.update_ui_state(arg)
+                        if arg == "RECORDING":
+                            self.active_window_handle = self.get_active_window()
+                    elif cmd == "transcription_result":
+                        self.handle_transcription(arg)
                 elif msg == "process_transcription":
                     threading.Thread(target=self.process_transcription).start()
+                elif msg == "quit":
+                    os._exit(0)
         except queue.Empty:
             pass
         self.root.after(50, self.process_queue)
@@ -144,7 +209,6 @@ class VoiceInputter:
         
         with sd.InputStream(samplerate=self.sample_rate, channels=1) as stream:
             while True:
-                # Read audio chunk
                 try:
                     indata, overflow = stream.read(int(self.sample_rate * 0.1)) # 100ms
                     if overflow: pass 
@@ -168,19 +232,18 @@ class VoiceInputter:
 
                 # State Logic
                 if self.state == "READY":
-                    # Voice Trigger Logic
+                    # Voice Trigger
                     if self.use_voice_trigger and amplitude > THRESHOLD:
                         logger.info("Voice trigger detected!")
                         self.start_recording_logic()
-                        # Pre-pend current chunk? 
                         self.audio_data.append(indata.copy())
-                        has_spoken = True # Should trigger silence logic immediately after
+                        has_spoken = True
                         silence_start = None
 
                 elif self.state == "RECORDING":
                     self.audio_data.append(indata.copy())
                     
-                    # Auto-Stop Logic
+                    # Auto-Stop
                     if self.use_auto_stop:
                         if amplitude > THRESHOLD:
                             silence_start = None
@@ -197,16 +260,15 @@ class VoiceInputter:
     def start_recording_logic(self):
         self.active_window_handle = self.get_active_window()
         self.audio_data = []
-        self.queue.put(("ui", "RECORDING"))
+        self.queue.put(("audio_state", "RECORDING"))
         logger.info("Recording started...")
 
     def stop_recording_logic(self):
         logger.info("Recording stopped.")
-        self.queue.put(("ui", "PROCESSING"))
+        self.queue.put(("audio_state", "PROCESSING"))
         self.queue.put("process_transcription")
 
-    # ... [Rest of methods: check_connection, get_active_window, refocus_window, find_node_by_class/title, save_audio, upload_audio, process_transcription, handle_final_text, play_tts, on_press/release, run]
-    # Re-implementing them cleanly below
+    # --- ComfyUI & System Integration ---
 
     def check_connection(self):
         try:
@@ -287,13 +349,11 @@ class VoiceInputter:
                             
                             if is_target:
                                 output = data.get('output', {})
-                                # Extract text logic
                                 if isinstance(output, dict):
                                     if 'string' in output: final_text = output['string']
                                     elif 'text' in output: final_text = output['text']
                                     elif 'ui' in output and 'text' in output['ui']: final_text = output['ui']['text'][0]
                                     else:
-                                        # Fallback
                                         for v in output.values():
                                             if isinstance(v, list) and len(v)>0 and isinstance(v[0], str) and not v[0].endswith('.wav'):
                                                 final_text = v[0]
@@ -305,7 +365,7 @@ class VoiceInputter:
                         if message['data']['prompt_id'] == prompt_id: break
             
             if final_text:
-                self.handle_final_text(final_text.strip())
+                self.queue.put(("transcription_result", final_text.strip()))
             else:
                 self.queue.put(("ui", "READY"))
 
@@ -315,10 +375,27 @@ class VoiceInputter:
         finally:
             if ws: ws.close()
 
-    def handle_final_text(self, text):
-        if not text: 
+    def handle_transcription(self, text):
+        if not text: return
+        
+        # Logic: Auto-Enter vs Append
+        if self.auto_enter_var.get():
+            # Update text area to show what's being sent
+            self.text_area.delete("1.0", tk.END)
+            self.text_area.insert("1.0", text)
+            self.send_text_to_window(text)
             self.queue.put(("ui", "READY"))
-            return
+        else:
+            # Append text
+            current = self.text_area.get("1.0", tk.END).strip()
+            if current:
+                self.text_area.insert(tk.END, " " + text)
+            else:
+                self.text_area.insert(tk.END, text)
+            self.text_area.see(tk.END)
+            self.queue.put(("ui", "READY"))
+
+    def send_text_to_window(self, text):
         print(text)
         if self.active_window_handle:
             try:
@@ -327,9 +404,10 @@ class VoiceInputter:
             except: pass
         pyperclip.copy(text)
         pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.1)
-        pyautogui.press('enter')
-        self.queue.put(("ui", "READY"))
+        
+        if self.auto_enter_var.get():
+            time.sleep(0.1)
+            pyautogui.press('enter')
 
     def on_press(self, key):
         if key in HOTKEY:
@@ -341,6 +419,10 @@ class VoiceInputter:
     def on_release(self, key):
         if key in self.current_keys:
             self.current_keys.remove(key)
+
+    def quit_app(self):
+        self.root.quit()
+        self.queue.put("quit")
 
     def run(self):
         logger.info(f"VoiceInputter started. Press F9 to toggle.")
