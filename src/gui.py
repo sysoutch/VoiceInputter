@@ -76,9 +76,16 @@ class Overlay:
         self.ent_silence.pack(side=tk.LEFT, padx=(5, 0))
         tk.Label(as_frame, text="s", bg="#333333", fg="white").pack(side=tk.LEFT)
         
-        self.chk_voice_trigger = tk.Checkbutton(opts_frame, text="Record on Voice", var=self.vad_trigger_var, command=self.update_settings,
+        vt_frame = tk.Frame(opts_frame, bg="#333333")
+        vt_frame.pack(anchor="w", fill=tk.X)
+        
+        self.chk_voice_trigger = tk.Checkbutton(vt_frame, text="Record on Voice", var=self.vad_trigger_var, command=self.update_settings,
                                                 bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
-        self.chk_voice_trigger.pack(anchor="w")
+        self.chk_voice_trigger.pack(side=tk.LEFT)
+
+        self.vad_threshold_var = tk.StringVar(value="0.01")
+        self.ent_threshold = tk.Entry(vt_frame, textvariable=self.vad_threshold_var, width=5, bg="#555555", fg="white", bd=0)
+        self.ent_threshold.pack(side=tk.LEFT, padx=(5, 0))
 
         self.chk_auto_process = tk.Checkbutton(opts_frame, text="Auto-Process", var=self.auto_process_var,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")

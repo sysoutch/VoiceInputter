@@ -20,6 +20,7 @@ class AudioManager:
         self.use_auto_stop = True
         self.use_voice_trigger = False
         self.silence_duration = VAD_SILENCE_DURATION
+        self.threshold = VAD_THRESHOLD
         
         # Start Loop
         self.thread = threading.Thread(target=self.audio_loop, daemon=True)
@@ -32,12 +33,16 @@ class AudioManager:
                 self.thread.join(timeout=1.0)
             except: pass
 
-    def update_settings(self, auto_stop, voice_trigger, silence_duration=None):
+    def update_settings(self, auto_stop, voice_trigger, silence_duration=None, threshold=None):
         self.use_auto_stop = auto_stop
         self.use_voice_trigger = voice_trigger
         if silence_duration is not None:
             try:
                 self.silence_duration = float(silence_duration)
+            except: pass
+        if threshold is not None:
+            try:
+                self.threshold = float(threshold)
             except: pass
 
     def set_state(self, state):
@@ -91,7 +96,7 @@ class AudioManager:
                     
                     # Logic based on state
                     if self.state == "READY":
-                        if self.use_voice_trigger and amplitude > VAD_THRESHOLD:
+                        if self.use_voice_trigger and amplitude > self.threshold:
                             self.logger.info("Voice trigger detected!")
                             self.start_recording()
                             self.audio_data.append(indata.copy())
@@ -102,7 +107,7 @@ class AudioManager:
                         self.audio_data.append(indata.copy())
                         
                         if self.use_auto_stop:
-                            if amplitude > VAD_THRESHOLD:
+                            if amplitude > self.threshold:
                                 silence_start = None
                                 has_spoken = True
                             elif has_spoken:

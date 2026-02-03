@@ -198,7 +198,8 @@ class VoiceInputterApp:
         self.audio.update_settings(
             self.gui.vad_auto_stop_var.get(),
             self.gui.vad_trigger_var.get(),
-            self.gui.vad_silence_var.get()
+            self.gui.vad_silence_var.get(),
+            self.gui.vad_threshold_var.get()
         )
         self.gui.root.after(500, self.sync_settings)
 
