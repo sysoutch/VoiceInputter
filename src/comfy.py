@@ -50,8 +50,9 @@ class ComfyClient:
         return None
 
     def process(self, audio_data, sample_rate):
-        if not self.save_audio(audio_data, sample_rate):
-            return None
+        if audio_data is not None:
+            if not self.save_audio(audio_data, sample_rate):
+                return None
         
         abs_path = os.path.abspath(INPUT_FILENAME)
         load_node_id = self.find_node("class_type", "LoadAudio")

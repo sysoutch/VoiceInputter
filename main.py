@@ -11,6 +11,7 @@ from src.config import HOTKEY, SAMPLE_RATE
 from src.gui import Overlay
 from src.audio import AudioManager
 from src.comfy import ComfyClient
+from src.network import NetworkManager
 
 # Logging Setup
 logging.basicConfig(
@@ -29,6 +30,7 @@ class VoiceInputterApp:
         self.gui = Overlay(self.queue)
         self.audio = AudioManager(self.queue, logger)
         self.comfy = ComfyClient(logger, self.client_id)
+        self.network = NetworkManager(self.comfy, logger)
         
         self.active_window_handle = None
         self.current_keys = set()
@@ -67,7 +69,17 @@ class VoiceInputterApp:
 
     def process_transcription_task(self, audio_data):
         logger.info("Processing transcription...")
-        text = self.comfy.process(audio_data, SAMPLE_RATE)
+        
+        if self.gui.network_client_var.get():
+            target = self.gui.get_selected_peer()
+            if target:
+                logger.info(f"Sending audio to {target}")
+                text = self.network.send_audio(target, audio_data)
+            else:
+                logger.warning("No peer selected")
+                text = None
+        else:
+            text = self.comfy.process(audio_data, SAMPLE_RATE)
         
         if text:
             self.queue.put(("transcription_result", text))
@@ -141,7 +153,12 @@ class VoiceInputterApp:
                     else:
                         logger.warning("No audio to process")
 
+                elif msg == "scan_network":
+                    peers = self.network.get_peers()
+                    self.gui.update_peers(peers)
+
                 elif msg == "quit":
+                    self.network.stop()
                     os._exit(0)
 
         except Exception as e:
@@ -162,6 +179,7 @@ class VoiceInputterApp:
 
     def run(self):
         logger.info("VoiceInputter started.")
+        self.network.start()
         self.sync_settings()
         
         listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
@@ -177,7 +195,8 @@ class VoiceInputterApp:
     def sync_settings(self):
         self.audio.update_settings(
             self.gui.vad_auto_stop_var.get(),
-            self.gui.vad_trigger_var.get()
+            self.gui.vad_trigger_var.get(),
+            self.gui.vad_silence_var.get()
         )
         self.gui.root.after(500, self.sync_settings)
 

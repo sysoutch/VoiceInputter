@@ -18,14 +18,19 @@ class AudioManager:
         # Settings
         self.use_auto_stop = True
         self.use_voice_trigger = False
+        self.silence_duration = VAD_SILENCE_DURATION
         
         # Start Loop
         self.thread = threading.Thread(target=self.audio_loop, daemon=True)
         self.thread.start()
 
-    def update_settings(self, auto_stop, voice_trigger):
+    def update_settings(self, auto_stop, voice_trigger, silence_duration=None):
         self.use_auto_stop = auto_stop
         self.use_voice_trigger = voice_trigger
+        if silence_duration is not None:
+            try:
+                self.silence_duration = float(silence_duration)
+            except: pass
 
     def set_state(self, state):
         self.state = state
@@ -84,7 +89,7 @@ class AudioManager:
                         elif has_spoken:
                             if silence_start is None:
                                 silence_start = time.time()
-                            elif time.time() - silence_start > VAD_SILENCE_DURATION:
+                            elif time.time() - silence_start > self.silence_duration:
                                 self.logger.info("Silence auto-stop.")
                                 self.stop_recording()
                                 silence_start = None

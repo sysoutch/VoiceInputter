@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+import tkinter.ttk as ttk
 import queue
 
 class Overlay:
@@ -13,6 +14,7 @@ class Overlay:
         self.auto_process_var = tk.BooleanVar(value=True)
         self.auto_enter_var = tk.BooleanVar(value=True)
         self.always_on_top_var = tk.BooleanVar(value=True)
+        self.network_client_var = tk.BooleanVar(value=False)
         
         # State
         self.drag_data = {"x": 0, "y": 0}
@@ -27,7 +29,7 @@ class Overlay:
         self.root.attributes('-alpha', 0.8)
         
         screen_width = self.root.winfo_screenwidth()
-        self.root.geometry(f"250x300+{screen_width-270}+20")
+        self.root.geometry(f"300x400+{screen_width-320}+20")
         
         # Bind dragging
         self.root.bind("<Button-1>", self.start_drag)
@@ -54,16 +56,25 @@ class Overlay:
         self.send_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
 
         # Process Button (hidden by default)
-        self.process_btn = tk.Button(self.frame, text="PROCESS AUDIO", command=self.manual_process, bg="#FF9800", fg="white", font=("Arial", 9, "bold"))
+        self.process_btn = tk.Button(self.frame, text="PROCESS TEXT", command=self.manual_process, bg="#FF9800", fg="white", font=("Arial", 9, "bold"))
 
         # Options Frame
         opts_frame = tk.Frame(self.frame, bg="#333333")
         opts_frame.pack(fill=tk.X, padx=10, pady=5)
         
         # Toggles
-        self.chk_auto_stop = tk.Checkbutton(opts_frame, text="Auto-Stop", var=self.vad_auto_stop_var, command=self.update_settings,
+        # Auto-Stop Row with Input
+        as_frame = tk.Frame(opts_frame, bg="#333333")
+        as_frame.pack(anchor="w", fill=tk.X)
+        
+        self.chk_auto_stop = tk.Checkbutton(as_frame, text="Auto-Stop", var=self.vad_auto_stop_var, command=self.update_settings,
                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
-        self.chk_auto_stop.pack(anchor="w")
+        self.chk_auto_stop.pack(side=tk.LEFT)
+
+        self.vad_silence_var = tk.StringVar(value="2.0")
+        self.ent_silence = tk.Entry(as_frame, textvariable=self.vad_silence_var, width=4, bg="#555555", fg="white", bd=0)
+        self.ent_silence.pack(side=tk.LEFT, padx=(5, 0))
+        tk.Label(as_frame, text="s", bg="#333333", fg="white").pack(side=tk.LEFT)
         
         self.chk_voice_trigger = tk.Checkbutton(opts_frame, text="Record on Voice", var=self.vad_trigger_var, command=self.update_settings,
                                                 bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
@@ -76,6 +87,19 @@ class Overlay:
         self.chk_auto_enter = tk.Checkbutton(opts_frame, text="Auto-Enter", var=self.auto_enter_var,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
         self.chk_auto_enter.pack(anchor="w")
+        
+        self.chk_network = tk.Checkbutton(opts_frame, text="Network Client", var=self.network_client_var, command=self.toggle_network_ui,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_network.pack(anchor="w")
+
+        # Network Frame
+        self.network_frame = tk.Frame(self.frame, bg="#333333")
+        
+        self.combo_peers = ttk.Combobox(self.network_frame, values=[], width=15)
+        self.combo_peers.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_scan = tk.Button(self.network_frame, text="Scan", command=self.manual_scan, bg="#FF9800", fg="white", font=("Arial", 8))
+        self.btn_scan.pack(side=tk.LEFT)
 
         # Close Button
         self.close_btn = tk.Button(self.frame, text="x", command=self.quit_app, bg="#333333", fg="white", font=("Arial", 8), bd=0)
@@ -105,6 +129,24 @@ class Overlay:
 
     def manual_process(self):
         self.queue.put("manual_process")
+
+    def manual_scan(self):
+        self.queue.put("scan_network")
+
+    def toggle_network_ui(self):
+        if self.network_client_var.get():
+            self.network_frame.pack(fill=tk.X, padx=10, pady=5)
+            self.manual_scan()
+        else:
+            self.network_frame.pack_forget()
+
+    def update_peers(self, peers):
+        self.combo_peers['values'] = peers
+        if peers and not self.combo_peers.get():
+            self.combo_peers.current(0)
+            
+    def get_selected_peer(self):
+        return self.combo_peers.get()
 
     def show_process_btn(self):
         self.process_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
