@@ -1,32 +1,20 @@
 # System Patterns: VoiceInputter
 
 ## Architecture Overview
-The system follows a pipeline architecture triggered by user interaction (hotkey), leveraging an external processing engine (ComfyUI) for heavy lifting.
+The system uses a multi-threaded architecture to separate audio processing, UI rendering, and backend communication.
 
-## Core Flow
-1.  **Trigger:** User presses `F9`.
-2.  **Capture:** System records audio from the microphone until `F9` is pressed again.
-3.  **Process:**
-    -   Audio is saved to a local WAV file.
-    -   File is uploaded to ComfyUI.
-    -   Workflow is submitted to ComfyUI via HTTP API.
-4.  **Listen:** System connects to ComfyUI WebSocket to listen for execution events.
-5.  **Extract:**
-    -   Listens for `executed` event.
-    -   Identifies the target node (e.g., "Preview Text") to ensure correct output.
-    -   Extracts the transcription string.
-6.  **Output:**
-    -   Refocuses the originally active window.
-    -   Pastes text via Clipboard (Ctrl+V).
-    -   Simulates `Enter` key press.
+## Core Threads
+1.  **Main Thread (UI):** Runs the `tkinter` mainloop. Handles all UI updates and user interactions. Polls a thread-safe `queue` for events from other threads.
+2.  **Audio Thread (Daemon):** Continuously captures audio from `sounddevice`. Handles VAD logic (Voice Trigger and Auto-Stop). Pushes events (`ui`, `toggle`, `auto_stop`) to the main thread.
+3.  **Processing Thread (Worker):** Spawned on demand to handle ComfyUI communication (Upload -> Queue -> Listen -> Extract). Pushes final text or errors back to the main thread.
+4.  **Keyboard Thread:** `pynput` listener running in background to detect global hotkeys.
+
+## Data Flow
+-   **Audio:** Mic -> `Audio Thread` -> Buffer -> VAD Check -> `self.audio_data`.
+-   **Events:** `Audio Thread` / `Keyboard Thread` -> `self.queue` -> `Main Thread (process_queue)` -> UI Update / Action.
+-   **Transcription:** `Main Thread` -> triggers `Processing Thread` -> ComfyUI API -> WebSocket -> `Processing Thread` -> `Main Thread` (via Clipboard/Keyboard).
 
 ## Key Components
-1.  **VoiceInputter Class:** Encapsulates all logic.
-    -   `record_audio()`: Handles `sounddevice` stream.
-    -   `process_transcription()`: Orchestrates upload, queueing, and result retrieval.
-    -   `handle_final_text()`: Manages clipboard and keyboard simulation.
-2.  **ComfyUI Workflow (`stt.json`):** Defines the server-side processing chain (LoadAudio -> Whisper -> Preview).
-
-## Design Patterns
--   **Event-Driven:** Uses `pynput` for keyboard events and WebSocket for server responses.
--   **Polling vs Push:** Shifted from polling `/history` to listening for WebSocket push events for lower latency.
+-   **Overlay:** Persistent top-most window.
+-   **VAD:** Energy-based silence/speech detection.
+-   **ComfyUI Client:** Handles specific workflow node targeting ("Preview Text").

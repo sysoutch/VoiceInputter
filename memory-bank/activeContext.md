@@ -1,19 +1,22 @@
 # Active Context: VoiceInputter
 
 ## Current Focus
-- Polishing the text extraction and output mechanism.
-- Maintaining documentation of the implemented features.
+- Refactoring the monolithic script into a modular structure.
+- Enhancing the UI with drag capability and text editing features.
+- Pushing updates to GitHub.
 
 ## Recent Changes
-- Implemented robust text extraction from ComfyUI using WebSocket `executed` messages.
-- Specifically targeted the "Preview Text" node to avoid alignment JSON data.
-- Added automatic "Enter" key press after pasting text.
-- Cleaned up console output to print only the raw transcription.
+- Implemented "Record on Voice Input" (Auto-Start) and "Auto-Stop" (VAD).
+- Added a persistent UI overlay with status indicators and manual controls.
+- Fixed code artifact issues.
 
 ## Next Steps
-- Verify the system reliability in different scenarios (e.g., failed transcription, ComfyUI errors).
-- Update the `README.md` with usage instructions and dependencies.
+- Split `voice_inputter.py` into `src/` modules (`gui`, `audio`, `comfy`, `main`).
+- Add "Draggable Window" functionality.
+- Add "Text Edit" area to the overlay.
+- Add "Auto-Enter" and "Auto-Send" toggles.
+- Update GitHub repository.
 
 ## Active Decisions and Considerations
-- **Output Handling:** We are now using WebSocket event listening instead of polling the history endpoint. This is faster and avoids race conditions.
-- **Node Targeting:** We search for nodes by title ("Preview Text") in the workflow metadata to ensure we grab the correct output.
+- **Modularization:** Splitting the code will make it easier to manage the growing UI and Audio logic.
+- **UI Interaction:** The overlay is becoming a control panel. Need to balance compactness with new features (Text Area).

@@ -1,19 +1,21 @@
 # Progress: VoiceInputter
 
 ## What Works
-- **Audio Capture:** Recording via `sounddevice` and saving to WAV.
-- **Backend Integration:** Full communication with ComfyUI (Upload, Queue Prompt, WebSocket Listen).
-- **Text Extraction:** Robust logic to capture transcription from specific workflow nodes ("Preview Text").
-- **Output:** Auto-pasting to active window followed by `Enter` key.
-- **Configuration:** Dynamic node finding based on workflow metadata.
+- **Audio Capture:** Continuous monitoring with `sounddevice`.
+- **VAD:** Silence detection (Auto-Stop) and Voice Trigger (Auto-Start).
+- **Backend:** ComfyUI integration (Upload, Queue, WebSocket).
+- **UI:** Persistent overlay with status (Ready/Recording/Processing).
+- **Controls:** Manual Record/Stop buttons, VAD toggles.
+- **Output:** Auto-paste + Enter.
 
 ## What's Left to Build
-- **User Interface:** Currently a CLI tool; a GUI could be added later if needed.
-- **Error Handling:** Can be improved for edge cases (e.g. ComfyUI not running).
-- **Packaging:** Create a standalone executable.
+- **Refactoring:** Modularize codebase.
+- **UI Enhancements:** Draggable window, Text Edit Area.
+- **Control Enhancements:** Auto-Send/Auto-Enter toggles.
+- **Packaging:** Standalone executable.
 
 ## Current Status
-The core functionality is complete and verified. The tool successfully transcribes voice input and types it into the active application.
+The tool is fully functional with advanced VAD features. We are now focusing on UX improvements and code maintainability.
 
 ## Known Issues
-- None at this time.
+- None.

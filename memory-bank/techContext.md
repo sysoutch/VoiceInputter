@@ -3,24 +3,21 @@
 ## Technologies Used
 - **Language:** Python 3.
 - **Runtime:** Standard Python Interpreter.
-- **Backend:** ComfyUI (Local API) for Speech-to-Text processing.
-- **Libraries:**
-    - `requests`: HTTP communication with ComfyUI.
-    - `websocket-client`: Real-time event listening from ComfyUI.
-    - `sounddevice` & `numpy`: Audio recording and processing.
-    - `pynput`: Global hotkey handling (F9).
-    - `pyautogui` & `pyperclip`: Simulating text input and keyboard actions.
-    - `pygetwindow` (optional): Active window tracking.
+- **GUI:** `tkinter` (Standard Library).
+- **Backend:** ComfyUI (Local API).
+- **Audio:** `sounddevice` (PortAudio wrapper) + `numpy`.
+- **Keyboard:** `pynput` (Hotkeys) + `pyautogui` (Typing).
+- **Networking:** `requests` + `websocket-client`.
 
 ## Development Setup
 - **OS:** Windows 11.
 - **IDE:** Visual Studio Code.
-- **Version Control:** Git.
+- **Version Control:** Git + Git LFS.
 
 ## Technical Constraints
-- **ComfyUI Dependency:** Requires a running instance of ComfyUI on `localhost:8188` (configurable).
-- **Workflow Dependency:** Relies on a specific `stt.json` workflow structure, expecting "Apply Whisper" and "Preview Text" nodes.
-- **Audio Hardware:** Requires a functional microphone accessible by `sounddevice`.
+- **Threading:** `tkinter` must run in the main thread. All other tasks (Audio, Keyboard, Network) run in background threads and communicate via `queue.Queue`.
+- **Audio Stream:** A single persistent `sounddevice.InputStream` is used to avoid initialization latency and conflicts.
+- **ComfyUI:** Requires specific node classes ("Apply Whisper", "Preview Text") to be present in the workflow.
 
 ## Dependencies
 - `requests`
@@ -30,3 +27,4 @@
 - `pynput`
 - `pyautogui`
 - `pyperclip`
+- `pygetwindow`
