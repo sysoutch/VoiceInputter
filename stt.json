@@ -1,0 +1,55 @@
+{
+  "98": {
+    "inputs": {
+      "model": "large-v3-turbo",
+      "language": "auto",
+      "prompt": "",
+      "audio": [
+        "106",
+        0
+      ]
+    },
+    "class_type": "Apply Whisper",
+    "_meta": {
+      "title": "Apply Whisper"
+    }
+  },
+  "99": {
+    "inputs": {
+      "preview": "hu Großut",
+      "previewMode": null,
+      "source": [
+        "98",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview Text"
+    }
+  },
+  "100": {
+    "inputs": {
+      "preview": "[\n    {\n        \"value\": \"hu Gro\\u00dfut\",\n        \"start\": 0.0,\n        \"end\": 2.02\n    }\n]",
+      "previewMode": null,
+      "source": [
+        "98",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview Alignments"
+    }
+  },
+  "106": {
+    "inputs": {
+      "audio": "input_audio (3).wav",
+      "audioUI": ""
+    },
+    "class_type": "LoadAudio",
+    "_meta": {
+      "title": "Load Audio"
+    }
+  }
+}

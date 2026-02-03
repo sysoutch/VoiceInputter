@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.wav
+output_tts.wav
+input_audio.wav
+.env
+venv/
+.vscode/
