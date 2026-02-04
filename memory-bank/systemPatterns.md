@@ -17,5 +17,6 @@ The system uses a multi-threaded architecture with a central Coordinator Loop to
 ## Key Patterns
 -   **Concurrent Recording/Processing:** The decoupling of audio capture and transcription allows the user to record new clips immediately while previous ones are being processed in the background.
 -   **Separation of Transcription and Output:** The system distinguishes between "Auto-Process" (transcribing audio to text) and "Auto-Send" (typing text to window). This allows users to review or queue transcriptions before sending.
+-   **Target Window Management:** Uses `pygetwindow` to scan and list open applications. Text injection logic checks for a specific target window and brings it to the foreground before typing, overriding the default behavior of typing into the currently active window.
 -   **Dynamic Prefixes:** Prefixes (e.g., "1.", "a)") are calculated dynamically based on the item's current position in the list relative to other items of the same type. This ensures prefixes remain correct even after reordering or deleting items.
 -   **State Management:** The UI reflects both audio state (Recording vs Ready) and processing state (Processing vs Idle) without blocking user interaction.

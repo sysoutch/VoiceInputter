@@ -19,6 +19,7 @@ class Overlay:
         self.prefix_mode_var = tk.StringVar(value="- ")
         self.postfix_var = tk.BooleanVar(value=False)
         self.postfix_mode_var = tk.StringVar(value="space")
+        self.target_window_var = tk.StringVar(value="<Active Window>")
         self.always_on_top_var = tk.BooleanVar(value=True)
         self.network_client_var = tk.BooleanVar(value=False)
         self.vad_threshold_var = tk.StringVar(value="0.01")
@@ -170,6 +171,17 @@ class Overlay:
         self.combo_postfix = ttk.Combobox(pf_frame, textvariable=self.postfix_mode_var, values=["space", ", comma", ". dot"], width=10, state="readonly")
         self.combo_postfix.pack(side=tk.LEFT, padx=20)
         
+        # Target Window Row
+        target_frame = tk.Frame(opts_frame, bg="#333333")
+        target_frame.pack(anchor="w", fill=tk.X)
+        tk.Label(target_frame, text="Target:", bg="#333333", fg="white").pack(side=tk.LEFT)
+        
+        self.combo_target = ttk.Combobox(target_frame, textvariable=self.target_window_var, values=["<Active Window>"], width=20, state="readonly")
+        self.combo_target.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_refresh_target = tk.Button(target_frame, text="↻", command=self.manual_scan_windows, bg="#555555", fg="white", font=("Arial", 8), width=2)
+        self.btn_refresh_target.pack(side=tk.LEFT)
+        
         self.chk_network = tk.Checkbutton(opts_frame, text="Network Client", var=self.network_client_var, command=self.toggle_network_ui,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
         self.chk_network.pack(anchor="w")
@@ -226,6 +238,7 @@ class Overlay:
         if text: self.queue.put(("send_text", text))
     def manual_process(self): self.queue.put("manual_process")
     def manual_scan(self): self.queue.put("scan_network")
+    def manual_scan_windows(self): self.queue.put("scan_windows")
     def quit_app(self):
         self.queue.put("quit")
     
@@ -239,6 +252,16 @@ class Overlay:
         self.combo_peers['values'] = peers
         if peers and not self.combo_peers.get(): self.combo_peers.current(0)
     def get_selected_peer(self): return self.combo_peers.get()
+
+    def update_window_list(self, windows):
+        current = self.target_window_var.get()
+        values = ["<Active Window>"] + windows
+        self.combo_target['values'] = values
+        
+        if current in values:
+            self.combo_target.set(current)
+        else:
+            self.combo_target.current(0)
 
     def show_process_btn(self): self.process_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
     def hide_process_btn(self): self.process_btn.pack_forget()

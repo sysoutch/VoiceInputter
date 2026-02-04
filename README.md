@@ -27,7 +27,8 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
 ### 🖥️ Desktop Integration
 - **Always-on-Top Overlay:** A compact, draggable interface that stays visible over your applications.
 - **Auto-Send Toggle:** Option to disable automatic typing, allowing you to review transcriptions in the list before sending.
-- **Auto-Type:** Automatically pastes the transcribed text into the active window (if Auto-Send is enabled).
+- **Target Window Selection:** Choose a specific open application to receive text input, or stick to the default "Active Window" mode.
+- **Auto-Type:** Automatically pastes the transcribed text into the selected target window (if Auto-Send is enabled).
 - **Clipboard Management:** Uses clipboard injection for fast and reliable text entry.
 
 ## Requirements

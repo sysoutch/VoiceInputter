@@ -177,10 +177,30 @@ class VoiceInputterApp:
 
     def send_text_to_window(self, text):
         logger.info(f"Sending text: {text}")
-        if self.active_window_handle:
+        
+        target = self.gui.target_window_var.get()
+        target_handle = None
+        
+        if target == "<Active Window>":
+            target_handle = self.active_window_handle
+        elif target:
             try:
-                self.active_window_handle.activate()
-                time.sleep(0.3)
+                import pygetwindow as gw
+                wins = gw.getWindowsWithTitle(target)
+                for w in wins:
+                    if w.title == target:
+                        target_handle = w
+                        break
+                if not target_handle and wins:
+                    target_handle = wins[0]
+            except Exception as e:
+                logger.error(f"Error finding target window: {e}")
+
+        if target_handle:
+            try:
+                if not target_handle.isActive:
+                    target_handle.activate()
+                    time.sleep(0.3)
             except: pass
         
         pyperclip.copy(text)
@@ -345,6 +365,14 @@ class VoiceInputterApp:
                 elif msg == "scan_network":
                     peers = self.network.get_peers()
                     self.gui.update_peers(peers)
+                
+                elif msg == "scan_windows":
+                    try:
+                        import pygetwindow as gw
+                        titles = sorted([t for t in gw.getAllTitles() if t.strip()])
+                        self.gui.update_window_list(titles)
+                    except Exception as e:
+                        logger.error(f"Scan windows error: {e}")
 
                 elif msg == "quit":
                     self.network.stop()
