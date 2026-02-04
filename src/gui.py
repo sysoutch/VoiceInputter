@@ -13,6 +13,9 @@ class Overlay:
         self.vad_trigger_var = tk.BooleanVar(value=False)
         self.auto_process_var = tk.BooleanVar(value=True)
         self.auto_enter_var = tk.BooleanVar(value=True)
+        self.auto_enter_mode_var = tk.StringVar(value="enter")
+        self.prefix_var = tk.BooleanVar(value=False)
+        self.prefix_mode_var = tk.StringVar(value="- ")
         self.always_on_top_var = tk.BooleanVar(value=True)
         self.network_client_var = tk.BooleanVar(value=False)
         self.vad_threshold_var = tk.StringVar(value="0.01")
@@ -21,6 +24,8 @@ class Overlay:
         # State
         self.drag_data = {"x": 0, "y": 0}
         self.resize_data = {}
+        self.is_processing = False
+        self.current_state = "READY"
         
         self.setup_window()
         self.setup_ui()
@@ -32,7 +37,12 @@ class Overlay:
         self.root.attributes('-alpha', 0.8)
         
         screen_width = self.root.winfo_screenwidth()
-        self.root.geometry(f"350x550+{screen_width-370}+20")
+        screen_height = self.root.winfo_screenheight()
+        width = 350
+        height = 550
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
         
         # Bind dragging (on root, but we override in widgets usually)
         self.root.bind("<Button-1>", self.start_drag)
@@ -79,6 +89,9 @@ class Overlay:
         
         self.btn_del = tk.Button(self.ctrl_frame, text="🗑", command=self.delete_rec, width=3, bg="#F44336", fg="white", font=("Arial", 8))
         self.btn_del.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_clear = tk.Button(self.ctrl_frame, text="CLEAR", command=self.clear_all_recs, width=6, bg="#D32F2F", fg="white", font=("Arial", 8))
+        self.btn_clear.pack(side=tk.RIGHT, padx=2)
 
         # Send/Process Buttons
         self.send_btn = tk.Button(self.frame, text="SEND TEXT", command=self.manual_send, bg="#2196F3", fg="white", font=("Arial", 9, "bold"))
@@ -115,9 +128,25 @@ class Overlay:
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
         self.chk_auto_process.pack(anchor="w")
 
-        self.chk_auto_enter = tk.Checkbutton(opts_frame, text="Auto-Enter", var=self.auto_enter_var,
+        # Auto-Enter Row
+        ae_frame = tk.Frame(opts_frame, bg="#333333")
+        ae_frame.pack(anchor="w", fill=tk.X)
+        self.chk_auto_enter = tk.Checkbutton(ae_frame, text="Auto-Enter", var=self.auto_enter_var,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
-        self.chk_auto_enter.pack(anchor="w")
+        self.chk_auto_enter.pack(side=tk.LEFT)
+        
+        self.combo_auto_enter = ttk.Combobox(ae_frame, textvariable=self.auto_enter_mode_var, values=["enter", "shift+enter", "ctrl+enter"], width=10, state="readonly")
+        self.combo_auto_enter.pack(side=tk.LEFT, padx=5)
+
+        # Prefix Row
+        p_frame = tk.Frame(opts_frame, bg="#333333")
+        p_frame.pack(anchor="w", fill=tk.X)
+        self.chk_prefix = tk.Checkbutton(p_frame, text="Prefix", var=self.prefix_var,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_prefix.pack(side=tk.LEFT)
+        
+        self.combo_prefix = ttk.Combobox(p_frame, textvariable=self.prefix_mode_var, values=["- ", "* ", "1. ", "a) "], width=10, state="readonly")
+        self.combo_prefix.pack(side=tk.LEFT, padx=25)
         
         self.chk_network = tk.Checkbutton(opts_frame, text="Network Client", var=self.network_client_var, command=self.toggle_network_ui,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
@@ -143,15 +172,28 @@ class Overlay:
     # ... (Rest of logic) ...
     
     def update_ui_state(self, state):
-        if state == "READY":
-            self.label.config(text="Ready", bg="#333333", fg="white")
-            self.frame.config(bg="#333333")
-            self.action_btn.config(text="RECORD", bg="#4CAF50", fg="white", state="normal")
-        elif state == "RECORDING":
+        self.current_state = state
+        self._refresh_ui()
+
+    def set_processing_state(self, is_processing):
+        self.is_processing = is_processing
+        self._refresh_ui()
+
+    def _refresh_ui(self):
+        if self.current_state == "RECORDING":
             self.label.config(text="🔴 Recording...", bg="red", fg="white")
             self.frame.config(bg="red")
             self.action_btn.config(text="STOP", bg="white", fg="red", state="normal")
-        elif state == "PROCESSING":
+        elif self.current_state == "READY":
+            if self.is_processing:
+                self.label.config(text="⏳ Processing...", bg="#2196F3", fg="white")
+                self.frame.config(bg="#2196F3")
+                self.action_btn.config(text="RECORD", bg="#4CAF50", fg="white", state="normal")
+            else:
+                self.label.config(text="Ready", bg="#333333", fg="white")
+                self.frame.config(bg="#333333")
+                self.action_btn.config(text="RECORD", bg="#4CAF50", fg="white", state="normal")
+        elif self.current_state == "PROCESSING":
             self.label.config(text="⏳ Processing...", bg="#2196F3", fg="white")
             self.frame.config(bg="#2196F3")
             self.action_btn.config(text="...", state="disabled", bg="#1976D2")
@@ -221,10 +263,16 @@ class Overlay:
         self.root.geometry(f"{new_width}x{new_height}")
 
     # List Methods
-    def update_rec_list(self, items):
+    def update_rec_list(self, items, select_index=None):
         self.rec_list.delete(0, tk.END)
         for item in items:
             self.rec_list.insert(tk.END, item)
+        
+        if select_index is not None and 0 <= select_index < len(items):
+            self.rec_list.selection_clear(0, tk.END)
+            self.rec_list.selection_set(select_index)
+            self.rec_list.activate(select_index)
+            self.rec_list.see(select_index)
             
     def move_rec(self, direction):
         # Direction: -1 (up), 1 (down)
@@ -238,3 +286,6 @@ class Overlay:
         if not sel: return
         index = sel[0]
         self.queue.put(("delete_rec", index))
+        
+    def clear_all_recs(self):
+        self.queue.put("clear_all")

@@ -16,7 +16,7 @@
   },
   "99": {
     "inputs": {
-      "preview": "hu Großut",
+      "preview": "",
       "previewMode": null,
       "source": [
         "98",
@@ -30,7 +30,7 @@
   },
   "100": {
     "inputs": {
-      "preview": "[\n    {\n        \"value\": \"hu Gro\\u00dfut\",\n        \"start\": 0.0,\n        \"end\": 2.02\n    }\n]",
+      "preview": "",
       "previewMode": null,
       "source": [
         "98",

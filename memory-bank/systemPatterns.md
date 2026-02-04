@@ -1,20 +1,20 @@
 # System Patterns: VoiceInputter
 
 ## Architecture Overview
-The system uses a multi-threaded architecture to separate audio processing, UI rendering, and backend communication.
+The system uses a multi-threaded architecture with a central Coordinator Loop to manage state and concurrency.
 
 ## Core Threads
-1.  **Main Thread (UI):** Runs the `tkinter` mainloop. Handles all UI updates and user interactions. Polls a thread-safe `queue` for events from other threads.
-2.  **Audio Thread (Daemon):** Continuously captures audio from `sounddevice`. Handles VAD logic (Voice Trigger and Auto-Stop). Pushes events (`ui`, `toggle`, `auto_stop`) to the main thread.
-3.  **Processing Thread (Worker):** Spawned on demand to handle ComfyUI communication (Upload -> Queue -> Listen -> Extract). Pushes final text or errors back to the main thread.
-4.  **Keyboard Thread:** `pynput` listener running in background to detect global hotkeys.
+1.  **Main Thread (Coordinator/UI):** Runs the `tkinter` mainloop and a `coordinator_loop`. Handles all UI updates, state transitions (`READY`, `RECORDING`, `PROCESSING`), and dispatches tasks. Polls a thread-safe `queue` for events.
+2.  **Audio Thread (Daemon):** continuously captures audio from `sounddevice`. Handles VAD logic. Pushes events (`recording_finished`, `toggle`) to the main thread.
+3.  **Processing Worker Thread (Daemon):** Consumes tasks from `processing_queue`. Handles ComfyUI communication sequentially. Pushes results (`send_text`, `processing_complete`) back to the main thread via queue.
+4.  **Keyboard Thread:** `pynput` listener for global hotkeys.
 
 ## Data Flow
--   **Audio:** Mic -> `Audio Thread` -> Buffer -> VAD Check -> `self.audio_data`.
--   **Events:** `Audio Thread` / `Keyboard Thread` -> `self.queue` -> `Main Thread (process_queue)` -> UI Update / Action.
--   **Transcription:** `Main Thread` -> triggers `Processing Thread` -> ComfyUI API -> WebSocket -> `Processing Thread` -> `Main Thread` (via Clipboard/Keyboard).
+-   **Audio:** Mic -> `Audio Thread` -> Buffer -> VAD -> `recording_finished` -> `Coordinator`.
+-   **Processing:** `Coordinator` -> `processing_queue` -> `Worker Thread` -> ComfyUI -> Text -> `Coordinator` -> UI/Clipboard.
+-   **UI Updates:** All logic threads push UI commands (`update_rec_list`, `ui_state`) to the main `queue`. The Coordinator executes them safely.
 
-## Key Components
--   **Overlay:** Persistent top-most window.
--   **VAD:** Energy-based silence/speech detection.
--   **ComfyUI Client:** Handles specific workflow node targeting ("Preview Text").
+## Key Patterns
+-   **Concurrent Recording/Processing:** The decoupling of audio capture and transcription allows the user to record new clips immediately while previous ones are being processed in the background.
+-   **Dynamic Prefixes:** Prefixes (e.g., "1.", "a)") are calculated dynamically based on the item's current position in the list relative to other items of the same type. This ensures prefixes remain correct even after reordering or deleting items.
+-   **State Management:** The UI reflects both audio state (Recording vs Ready) and processing state (Processing vs Idle) without blocking user interaction.

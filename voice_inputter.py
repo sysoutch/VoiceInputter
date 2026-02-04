@@ -10,6 +10,7 @@ import numpy as np
 import pyautogui
 import pyperclip
 from pynput import keyboard
+import string
 
 from src.config import HOTKEY, SAMPLE_RATE
 from src.gui import Overlay
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 class VoiceInputterApp:
     def __init__(self):
         self.queue = queue.Queue()
+        self.processing_queue = queue.Queue()
+        self.processing_tasks_count = 0
         self.client_id = str(uuid.uuid4())
         
         # Modules
@@ -39,36 +42,93 @@ class VoiceInputterApp:
         self.active_window_handle = None
         self.current_keys = set()
         
-        # Recordings Management: List of dicts {'file': path, 'text': string}
+        # Recordings Management: List of dicts {'file': path, 'text': string, 'prefix_mode': str/None, 'deleted': bool}
         self.recordings = []
         os.makedirs("recordings", exist_ok=True)
         self.load_existing_recordings()
+        
+        # Start Processing Worker
+        threading.Thread(target=self.processing_worker, daemon=True).start()
+
+    def processing_worker(self):
+        while True:
+            try:
+                # Task is tuple: (recording_dict, should_send_text)
+                # Prefix settings are now stored in recording_dict, so we don't need to pass them in task
+                task = self.processing_queue.get()
+                
+                try:
+                    logger.info(f"Processing worker got task.")
+                    # Handle legacy or new task format
+                    if len(task) >= 2:
+                        rec = task[0]
+                        should_send = task[1]
+                        
+                    if not rec.get('deleted', False):
+                        self.process_single_item(rec, should_send)
+                    else:
+                        logger.info("Skipping deleted recording.")
+                except Exception as e:
+                    logger.error(f"Processing worker error: {e}")
+                finally:
+                    self.queue.put(("processing_complete",))
+                    self.processing_queue.task_done()
+
+            except Exception as e:
+                logger.error(f"Processing worker fatal error: {e}")
 
     def load_existing_recordings(self):
         try:
             files = sorted([f for f in os.listdir("recordings") if f.endswith(".wav")])
-            # For existing files, we don't have text history unless we save it.
-            # For now, initialize with empty text.
-            self.recordings = [{'file': os.path.join("recordings", f), 'text': ""} for f in files]
+            # For existing files, assume no prefix mode initially
+            self.recordings = [{'file': os.path.join("recordings", f), 'text': "", 'prefix_mode': None} for f in files]
             self.update_gui_list()
         except: pass
 
-    def update_gui_list(self):
+    def calculate_full_text(self, rec):
+        text = rec.get('text', "")
+        if not text: return "" # Don't show prefix if no text? Or show? Usually show only when text exists.
+        
+        mode = rec.get('prefix_mode')
+        if not mode: return text
+        
+        # Calculate index in group
+        count = 0
+        found = False
+        for item in self.recordings:
+            if item is rec:
+                found = True
+                break
+            if item.get('prefix_mode') == mode: count += 1
+            
+        if not found: return text # Should not happen unless deleted
+        
+        # Generate prefix
+        prefix = self.generate_prefix(count, mode)
+        return prefix + text
+
+    def update_gui_list(self, select_index=None):
+        # Dispatch to queue with optional selection index
+        self.queue.put(("refresh_ui_list", select_index))
+
+    def _perform_ui_update(self, select_index=None):
+        # Actual update logic running in Main Thread
         display_list = []
+        full_text_parts = []
         for item in self.recordings:
             name = os.path.basename(item['file'])
-            txt = item['text']
-            if txt:
-                name += f" ({txt[:20]}...)"
+            full_text = self.calculate_full_text(item)
+            
+            if full_text:
+                # Show preview in list
+                preview = full_text if len(full_text) < 20 else full_text[:20] + "..."
+                name += f" ({preview})"
+                full_text_parts.append(full_text)
+            
             display_list.append(name)
         
-        self.gui.update_rec_list(display_list)
-        self.update_text_area() # Also ensure text area matches list order
-
-    def update_text_area(self):
-        # Concatenate all texts
-        full_text = " ".join([r['text'] for r in self.recordings if r['text']])
-        self.gui.update_text(full_text)
+        self.gui.update_rec_list(display_list, select_index)
+        self.gui.update_text(" ".join(full_text_parts))
 
     def save_recording(self, audio_data):
         if not audio_data: return None
@@ -82,7 +142,12 @@ class VoiceInputterApp:
                 wf.setframerate(SAMPLE_RATE)
                 wf.writeframes(audio_int16.tobytes())
             
-            entry = {'file': filename, 'text': ""}
+            # Capture Prefix Mode
+            prefix_mode = None
+            if self.gui.prefix_var.get():
+                prefix_mode = self.gui.prefix_mode_var.get()
+
+            entry = {'file': filename, 'text': "", 'prefix_mode': prefix_mode}
             self.recordings.append(entry)
             index = len(self.recordings) - 1
             self.update_gui_list()
@@ -110,69 +175,55 @@ class VoiceInputterApp:
         
         if self.gui.auto_enter_var.get():
             time.sleep(0.1)
-            pyautogui.press('enter')
-
-    def process_transcription_task(self, index=None):
-        # If index is provided, process that specific recording.
-        # If index is None, process all recordings that have no text.
-        
-        indices_to_process = []
-        if index is not None:
-            indices_to_process.append(index)
-        else:
-            for i, rec in enumerate(self.recordings):
-                # if not rec['text']: # Re-process everything? Or just missing?
-                # User might want to re-process all? Or just new?
-                # Usually "PROCESS ALL" implies everything currently in list.
-                # But to save time, maybe skip if text exists?
-                # User said "reorder files and text will also get reordered".
-                # This implies text exists.
-                # If manual process, maybe we assume text is missing.
-                # I'll process ALL to be safe/correct (maybe user changed workflow settings).
-                indices_to_process.append(i)
-        
-        logger.info(f"Processing {len(indices_to_process)} items...")
-        
-        for idx in indices_to_process:
-            if idx >= len(self.recordings): continue
-            
-            rec = self.recordings[idx]
-            filename = rec['file']
-            
-            # Read file data to pass to network/comfy if needed?
-            # ComfyClient can read file from disk if we setup INPUT_FILENAME.
-            # I'll manually copy the recording file to INPUT_FILENAME for Comfy.
-            from src.config import INPUT_FILENAME
-            try:
-                shutil.copy(filename, INPUT_FILENAME)
-            except Exception as e:
-                logger.error(f"File copy error: {e}")
-                continue
-
-            text = None
-            if self.gui.network_client_var.get():
-                # Network Logic (Simplified: Read file, send bytes)
-                # NetworkManager needs update to support file or we read it here.
-                # Keeping it simple: Skip network for now or read bytes.
-                logger.warning("Network not fully supported in file list mode.")
+            mode = self.gui.auto_enter_mode_var.get()
+            if mode == "shift+enter":
+                pyautogui.hotkey('shift', 'enter')
+            elif mode == "ctrl+enter":
+                pyautogui.hotkey('ctrl', 'enter')
             else:
-                # Comfy: Process INPUT_FILENAME (pass None as audio_data)
-                text = self.comfy.process(None, SAMPLE_RATE)
-            
-            if text:
-                self.recordings[idx]['text'] = text.strip()
-                self.update_gui_list() # Updates list label and main text area
-                
-                # If Auto-Process (index was not None), maybe send text immediately?
-                # But user wants "reorder".
-                # If Auto-Process, we usually want to paste result.
-                # If we paste result, we paste ONLY the new text?
-                # Yes, standard behavior.
-                if index is not None and self.gui.auto_process_var.get():
-                     self.send_text_to_window(text)
+                pyautogui.press('enter')
 
-        self.queue.put(("ui", "READY"))
-        self.audio.set_state("READY")
+    def generate_prefix(self, idx, mode):
+        if mode == "- ": return "- "
+        if mode == "* ": return "* "
+        if mode.startswith("1."):
+            return f"{idx + 1}. "
+        if mode.startswith("a)"):
+            def num_to_col(n):
+                s = ""
+                while n >= 0:
+                    s = chr(ord('a') + n % 26) + s
+                    n = n // 26 - 1
+                return s
+            return f"{num_to_col(idx)}) "
+        return ""
+
+    def process_single_item(self, rec, should_send):
+        filename = rec['file']
+        
+        from src.config import INPUT_FILENAME
+        try:
+            shutil.copy(filename, INPUT_FILENAME)
+        except Exception as e:
+            logger.error(f"File copy error: {e}")
+            return
+
+        text = None
+        if self.gui.network_client_var.get():
+            logger.warning("Network not fully supported in file list mode.")
+        else:
+            text = self.comfy.process(None, SAMPLE_RATE)
+        
+        if text:
+            if rec.get('deleted', False): return
+
+            rec['text'] = text.strip()
+            
+            # Request UI Update (will calc prefixes)
+            self.queue.put(("refresh_ui_list", None))
+            
+            if should_send and self.gui.auto_process_var.get():
+                 self.queue.put(("send_text_for_rec", rec))
 
     def coordinator_loop(self):
         try:
@@ -194,24 +245,46 @@ class VoiceInputterApp:
                             self.active_window_handle = self.get_active_window()
                     elif cmd == "send_text":
                         self.send_text_to_window(msg[1])
-                        # self.gui.update_text("") # Don't clear, we manage text area
+                    
+                    elif cmd == "send_text_for_rec":
+                        rec = msg[1]
+                        if not rec.get('deleted', False):
+                            text = self.calculate_full_text(rec)
+                            self.send_text_to_window(text)
                     
                     elif cmd == "move_rec":
                         index, direction = msg[1], msg[2]
                         if 0 <= index + direction < len(self.recordings):
                             self.recordings[index], self.recordings[index+direction] = self.recordings[index+direction], self.recordings[index]
-                            self.update_gui_list()
+                            self.update_gui_list(select_index=index+direction)
                     
                     elif cmd == "delete_rec":
                         index = msg[1]
                         if 0 <= index < len(self.recordings):
                             item = self.recordings.pop(index)
+                            item['deleted'] = True
                             try: os.remove(item['file'])
                             except: pass
-                            self.update_gui_list()
+                            
+                            new_sel = index - 1 if index > 0 else 0
+                            if not self.recordings: new_sel = None
+                            self.update_gui_list(select_index=new_sel)
                     
                     elif cmd == "update_rec_list":
+                        # Legacy handler
                         self.gui.update_rec_list(msg[1])
+                    
+                    elif cmd == "update_text_area":
+                        self.gui.update_text(msg[1])
+                    
+                    elif cmd == "refresh_ui_list":
+                         select_index = msg[1] if len(msg) > 1 else None
+                         self._perform_ui_update(select_index)
+                        
+                    elif cmd == "processing_complete":
+                        if self.processing_tasks_count > 0:
+                            self.processing_tasks_count -= 1
+                        self.gui.set_processing_state(self.processing_tasks_count > 0)
                 
                 elif msg == "toggle":
                     if self.audio.state == "READY":
@@ -224,20 +297,37 @@ class VoiceInputterApp:
                     # Save and Add to list
                     idx = self.save_recording(new_audio)
                     
-                    if self.gui.auto_process_var.get() and idx is not None:
-                        self.queue.put(("ui", "PROCESSING"))
-                        threading.Thread(target=self.process_transcription_task, args=(idx,)).start()
-                    else:
-                        self.gui.show_process_btn()
-                        self.gui.update_ui_state("READY")
-                        self.audio.set_state("READY")
+                    # Immediately Ready for next
+                    self.gui.update_ui_state("READY")
+                    self.audio.set_state("READY")
+                    
+                    if idx is not None:
+                        rec = self.recordings[idx]
+                        should_send = self.gui.auto_process_var.get()
+                        
+                        if should_send:
+                            self.processing_tasks_count += 1
+                            self.gui.set_processing_state(True)
+                            self.processing_queue.put((rec, True))
+                        else:
+                            self.gui.show_process_btn()
 
                 elif msg == "manual_process":
                     if self.recordings:
-                        self.queue.put(("ui", "PROCESSING"))
-                        threading.Thread(target=self.process_transcription_task, args=(None,)).start()
+                        self.processing_tasks_count += len(self.recordings)
+                        self.gui.set_processing_state(True)
+                        for rec in self.recordings:
+                            self.processing_queue.put((rec, False))
                     else:
                         logger.warning("No recordings to process")
+                
+                elif msg == "clear_all":
+                    for rec in self.recordings:
+                        rec['deleted'] = True
+                        try: os.remove(rec['file'])
+                        except: pass
+                    self.recordings = []
+                    self.update_gui_list()
 
                 elif msg == "scan_network":
                     peers = self.network.get_peers()
@@ -290,3 +380,40 @@ class VoiceInputterApp:
 if __name__ == "__main__":
     app = VoiceInputterApp()
     app.run()
+
+</final_file_content>
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+<environment_details>
+# Visual Studio Code Visible Files
+src/gui.py
+
+# Visual Studio Code Open Tabs
+memory-bank/projectbrief.md
+memory-bank/productContext.md
+README.md
+.gitattributes
+memory-bank/activeContext.md
+memory-bank/progress.md
+memory-bank/systemPatterns.md
+memory-bank/techContext.md
+src/config.py
+src/network.py
+requirements.txt
+src/comfy.py
+src/audio.py
+.gitignore
+.github/workflows/build.yml
+voice_inputter.py
+src/gui.py
+
+# Current Time
+2/4/2026, 8:06:56 PM (Europe/Zurich, UTC+1:00)
+
+# Context Window Usage
+127,159 / 1,048.576K tokens used (12%)
+
+# Current Mode
+ACT MODE
+</environment_details>

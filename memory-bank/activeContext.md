@@ -1,22 +1,23 @@
 # Active Context: VoiceInputter
 
 ## Current Focus
-- Refactoring the monolithic script into a modular structure.
-- Enhancing the UI with drag capability and text editing features.
-- Pushing updates to GitHub.
+- Finalizing UI features and preparing for local build.
+- Updating documentation.
 
 ## Recent Changes
-- Implemented "Record on Voice Input" (Auto-Start) and "Auto-Stop" (VAD).
-- Added a persistent UI overlay with status indicators and manual controls.
-- Fixed code artifact issues.
+- Implemented **concurrent processing**: Recording and transcription are now decoupled, allowing continuous input while processing happens in the background.
+- Added **dynamic prefixes**: Supports numbered lists ("1.", "2.") and lettered lists ("a)", "b)") that auto-update on reorder.
+- Enhanced UI:
+    - **Center Window**: Application starts centered.
+    - **Clear All**: Button to remove all recordings.
+    - **Auto-Enter Modes**: Dropdown for "enter", "shift+enter", "ctrl+enter".
+    - **Selection Preservation**: List selection follows item movement and deletion.
+- Modularized code into `src/`.
 
 ## Next Steps
-- Split `voice_inputter.py` into `src/` modules (`gui`, `audio`, `comfy`, `main`).
-- Add "Draggable Window" functionality.
-- Add "Text Edit" area to the overlay.
-- Add "Auto-Enter" and "Auto-Send" toggles.
-- Update GitHub repository.
+- Create local build with PyInstaller.
+- Push final changes to GitHub.
 
 ## Active Decisions and Considerations
-- **Modularization:** Splitting the code will make it easier to manage the growing UI and Audio logic.
-- **UI Interaction:** The overlay is becoming a control panel. Need to balance compactness with new features (Text Area).
+- **Concurrency:** Using a `processing_queue` ensures ComfyUI tasks run sequentially without blocking the UI or audio capture.
+- **Dynamic Prefixes:** Calculated on-the-fly during UI updates to handle reordering seamlessly.
