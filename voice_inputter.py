@@ -175,33 +175,51 @@ class VoiceInputterApp:
             return gw.getActiveWindow()
         except: return None
 
-    def send_text_to_window(self, text):
-        logger.info(f"Sending text: {text}")
+    def get_target_handle(self, target_name):
+        if target_name == "<Active Window>":
+            return self.active_window_handle
         
-        target = self.gui.target_window_var.get()
         target_handle = None
-        
-        if target == "<Active Window>":
-            target_handle = self.active_window_handle
-        elif target:
+        if target_name:
             try:
                 import pygetwindow as gw
-                wins = gw.getWindowsWithTitle(target)
-                for w in wins:
-                    if w.title == target:
+                # Try exact match first from all windows (safer than substring)
+                all_wins = gw.getAllWindows()
+                for w in all_wins:
+                    if w.title == target_name:
                         target_handle = w
                         break
-                if not target_handle and wins:
-                    target_handle = wins[0]
+                
+                # Disabled substring fallback to prevent focusing wrong windows (e.g. "Chat" matching "Chat Settings")
+                if target_handle:
+                    logger.info(f"Found target handle: {target_handle.title}")
+                else:
+                    logger.warning(f"Target window not found (exact match): {target_name}")
             except Exception as e:
                 logger.error(f"Error finding target window: {e}")
+        return target_handle
+
+    def send_text_to_window(self, text):
+        should_focus = self.gui.focus_target_var.get()
+        logger.info(f"Sending text: {text} | Focus: {should_focus}")
+        
+        target = self.gui.target_window_var.get()
+        target_handle = self.get_target_handle(target)
 
         if target_handle:
             try:
-                if not target_handle.isActive:
-                    target_handle.activate()
-                    time.sleep(0.3)
-            except: pass
+                if should_focus:
+                    if not target_handle.isActive:
+                        logger.info(f"Activating window: {target_handle.title}")
+                        try:
+                            if target_handle.isMinimized:
+                                target_handle.restore()
+                            target_handle.activate()
+                            time.sleep(0.3)
+                        except Exception as e:
+                            logger.error(f"Failed to activate window: {e}")
+            except Exception as e:
+                logger.error(f"Window manipulation error: {e}")
         
         pyperclip.copy(text)
         pyautogui.hotkey('ctrl', 'v')
@@ -373,6 +391,20 @@ class VoiceInputterApp:
                         self.gui.update_window_list(titles)
                     except Exception as e:
                         logger.error(f"Scan windows error: {e}")
+                
+                elif msg == "focus_target":
+                    target = self.gui.target_window_var.get()
+                    if target != "<Active Window>":
+                        handle = self.get_target_handle(target)
+                        if handle:
+                            try:
+                                logger.info(f"Manually activating: {handle.title}")
+                                if handle.isMinimized: handle.restore()
+                                handle.activate()
+                            except Exception as e:
+                                logger.error(f"Manual focus failed: {e}")
+                    else:
+                        logger.info("Cannot manually focus <Active Window> placeholder.")
 
                 elif msg == "quit":
                     self.network.stop()

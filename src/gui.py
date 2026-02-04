@@ -20,6 +20,7 @@ class Overlay:
         self.postfix_var = tk.BooleanVar(value=False)
         self.postfix_mode_var = tk.StringVar(value="space")
         self.target_window_var = tk.StringVar(value="<Active Window>")
+        self.focus_target_var = tk.BooleanVar(value=True)
         self.always_on_top_var = tk.BooleanVar(value=True)
         self.network_client_var = tk.BooleanVar(value=False)
         self.vad_threshold_var = tk.StringVar(value="0.01")
@@ -182,6 +183,13 @@ class Overlay:
         self.btn_refresh_target = tk.Button(target_frame, text="↻", command=self.manual_scan_windows, bg="#555555", fg="white", font=("Arial", 8), width=2)
         self.btn_refresh_target.pack(side=tk.LEFT)
         
+        self.chk_focus = tk.Checkbutton(target_frame, text="Focus", var=self.focus_target_var,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_focus.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_focus_now = tk.Button(target_frame, text="Go", command=self.manual_focus_target, bg="#555555", fg="white", font=("Arial", 8), width=3)
+        self.btn_focus_now.pack(side=tk.LEFT)
+        
         self.chk_network = tk.Checkbutton(opts_frame, text="Network Client", var=self.network_client_var, command=self.toggle_network_ui,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
         self.chk_network.pack(anchor="w")
@@ -239,6 +247,7 @@ class Overlay:
     def manual_process(self): self.queue.put("manual_process")
     def manual_scan(self): self.queue.put("scan_network")
     def manual_scan_windows(self): self.queue.put("scan_windows")
+    def manual_focus_target(self): self.queue.put("focus_target")
     def quit_app(self):
         self.queue.put("quit")
     

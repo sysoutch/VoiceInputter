@@ -9,6 +9,7 @@
 - Added **dynamic prefixes**: Supports numbered lists ("1.", "2.") and lettered lists ("a)", "b)") that auto-update on reorder.
 - Enhanced UI:
     - **Target Window Selection**: Dropdown to select a specific application window as the target for text output, independent of focus.
+    - **Focus Target Controls**: "Focus" toggle to control auto-activation, and "Go" button to manually activate the selected target window.
     - **Auto-Send**: New toggle to separate transcription from typing. Allows processing without immediate output.
     - **Postfix Support**: New option to append characters (space, comma, dot) to the transcribed text.
     - **Center Window**: Application starts centered.
