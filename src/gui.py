@@ -163,7 +163,6 @@ class Overlay:
     def manual_process(self): self.queue.put("manual_process")
     def manual_scan(self): self.queue.put("scan_network")
     def quit_app(self):
-        self.root.quit()
         self.queue.put("quit")
     
     def toggle_network_ui(self):
