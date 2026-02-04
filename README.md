@@ -17,6 +17,8 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
   - `1., 2., 3.` (Numbered list that auto-updates when you reorder items)
   - `a), b), c)` (Lettered list)
   - `- ` (Bullet points)
+- **Postfix Support:** Automatically append characters to the end of the text:
+  - `Space`, `Comma`, or `Dot`.
 - **Auto-Enter Modes:** Choose how the text is submitted:
   - `Enter` (Standard)
   - `Shift+Enter` (New line without sending)
@@ -24,7 +26,8 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
 
 ### 🖥️ Desktop Integration
 - **Always-on-Top Overlay:** A compact, draggable interface that stays visible over your applications.
-- **Auto-Type:** Automatically pastes the transcribed text into the active window.
+- **Auto-Send Toggle:** Option to disable automatic typing, allowing you to review transcriptions in the list before sending.
+- **Auto-Type:** Automatically pastes the transcribed text into the active window (if Auto-Send is enabled).
 - **Clipboard Management:** Uses clipboard injection for fast and reliable text entry.
 
 ## Requirements

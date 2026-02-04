@@ -12,10 +12,13 @@ class Overlay:
         self.vad_auto_stop_var = tk.BooleanVar(value=True)
         self.vad_trigger_var = tk.BooleanVar(value=False)
         self.auto_process_var = tk.BooleanVar(value=True)
+        self.auto_send_var = tk.BooleanVar(value=True)
         self.auto_enter_var = tk.BooleanVar(value=True)
         self.auto_enter_mode_var = tk.StringVar(value="enter")
         self.prefix_var = tk.BooleanVar(value=False)
         self.prefix_mode_var = tk.StringVar(value="- ")
+        self.postfix_var = tk.BooleanVar(value=False)
+        self.postfix_mode_var = tk.StringVar(value="space")
         self.always_on_top_var = tk.BooleanVar(value=True)
         self.network_client_var = tk.BooleanVar(value=False)
         self.vad_threshold_var = tk.StringVar(value="0.01")
@@ -63,8 +66,8 @@ class Overlay:
         self.action_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
         
         # Text Area
-        self.text_area = tk.Text(self.frame, height=4, width=25, font=("Arial", 10))
-        self.text_area.pack(pady=5, padx=10)
+        self.text_area = tk.Text(self.frame, height=4, font=("Arial", 10))
+        self.text_area.pack(fill=tk.BOTH, expand=True, pady=5, padx=10)
         
         # Recordings List
         self.list_frame = tk.Frame(self.frame, bg="#333333")
@@ -105,14 +108,14 @@ class Overlay:
         opts_frame.pack(fill=tk.X, padx=10, pady=5)
         
         # Auto-Stop
-        as_frame = tk.Frame(opts_frame, bg="#333333")
-        as_frame.pack(anchor="w", fill=tk.X)
-        self.chk_auto_stop = tk.Checkbutton(as_frame, text="Auto-Stop", var=self.vad_auto_stop_var, command=self.update_settings,
+        astop_frame = tk.Frame(opts_frame, bg="#333333")
+        astop_frame.pack(anchor="w", fill=tk.X)
+        self.chk_auto_stop = tk.Checkbutton(astop_frame, text="Auto-Stop", var=self.vad_auto_stop_var, command=self.update_settings,
                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
         self.chk_auto_stop.pack(side=tk.LEFT)
-        self.ent_silence = tk.Entry(as_frame, textvariable=self.vad_silence_var, width=4, bg="#555555", fg="white", bd=0)
+        self.ent_silence = tk.Entry(astop_frame, textvariable=self.vad_silence_var, width=4, bg="#555555", fg="white", bd=0)
         self.ent_silence.pack(side=tk.LEFT, padx=(5, 0))
-        tk.Label(as_frame, text="s", bg="#333333", fg="white").pack(side=tk.LEFT)
+        tk.Label(astop_frame, text="s", bg="#333333", fg="white").pack(side=tk.LEFT)
         
         # Voice Trigger
         vt_frame = tk.Frame(opts_frame, bg="#333333")
@@ -123,10 +126,19 @@ class Overlay:
         self.ent_threshold = tk.Entry(vt_frame, textvariable=self.vad_threshold_var, width=5, bg="#555555", fg="white", bd=0)
         self.ent_threshold.pack(side=tk.LEFT, padx=(5, 0))
 
-        # Toggles
-        self.chk_auto_process = tk.Checkbutton(opts_frame, text="Auto-Process", var=self.auto_process_var,
+        # Auto-Process
+        ap_frame = tk.Frame(opts_frame, bg="#333333")
+        ap_frame.pack(anchor="w", fill=tk.X)
+        self.chk_auto_process = tk.Checkbutton(ap_frame, text="Auto-Process", var=self.auto_process_var,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
-        self.chk_auto_process.pack(anchor="w")
+        self.chk_auto_process.pack(side=tk.LEFT)
+        
+        # Auto-Send
+        asend_frame = tk.Frame(opts_frame, bg="#333333")
+        asend_frame.pack(anchor="w", fill=tk.X)
+        self.chk_auto_send = tk.Checkbutton(asend_frame, text="Auto-Send", var=self.auto_send_var,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_auto_send.pack(side=tk.LEFT)
 
         # Auto-Enter Row
         ae_frame = tk.Frame(opts_frame, bg="#333333")
@@ -147,6 +159,16 @@ class Overlay:
         
         self.combo_prefix = ttk.Combobox(p_frame, textvariable=self.prefix_mode_var, values=["- ", "* ", "1. ", "a) "], width=10, state="readonly")
         self.combo_prefix.pack(side=tk.LEFT, padx=25)
+        
+        # Postfix Row
+        pf_frame = tk.Frame(opts_frame, bg="#333333")
+        pf_frame.pack(anchor="w", fill=tk.X)
+        self.chk_postfix = tk.Checkbutton(pf_frame, text="Postfix", var=self.postfix_var,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_postfix.pack(side=tk.LEFT)
+        
+        self.combo_postfix = ttk.Combobox(pf_frame, textvariable=self.postfix_mode_var, values=["space", ", comma", ". dot"], width=10, state="readonly")
+        self.combo_postfix.pack(side=tk.LEFT, padx=20)
         
         self.chk_network = tk.Checkbutton(opts_frame, text="Network Client", var=self.network_client_var, command=self.toggle_network_ui,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")

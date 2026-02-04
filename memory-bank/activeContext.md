@@ -8,6 +8,8 @@
 - Implemented **concurrent processing**: Recording and transcription are now decoupled, allowing continuous input while processing happens in the background.
 - Added **dynamic prefixes**: Supports numbered lists ("1.", "2.") and lettered lists ("a)", "b)") that auto-update on reorder.
 - Enhanced UI:
+    - **Auto-Send**: New toggle to separate transcription from typing. Allows processing without immediate output.
+    - **Postfix Support**: New option to append characters (space, comma, dot) to the transcribed text.
     - **Center Window**: Application starts centered.
     - **Clear All**: Button to remove all recordings.
     - **Auto-Enter Modes**: Dropdown for "enter", "shift+enter", "ctrl+enter".

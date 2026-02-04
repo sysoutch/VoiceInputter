@@ -81,7 +81,7 @@ class VoiceInputterApp:
         try:
             files = sorted([f for f in os.listdir("recordings") if f.endswith(".wav")])
             # For existing files, assume no prefix mode initially
-            self.recordings = [{'file': os.path.join("recordings", f), 'text': "", 'prefix_mode': None} for f in files]
+            self.recordings = [{'file': os.path.join("recordings", f), 'text': "", 'prefix_mode': None, 'postfix_mode': None} for f in files]
             self.update_gui_list()
         except: pass
 
@@ -89,23 +89,31 @@ class VoiceInputterApp:
         text = rec.get('text', "")
         if not text: return "" # Don't show prefix if no text? Or show? Usually show only when text exists.
         
+        # Calculate Prefix
+        prefix = ""
         mode = rec.get('prefix_mode')
-        if not mode: return text
-        
-        # Calculate index in group
-        count = 0
-        found = False
-        for item in self.recordings:
-            if item is rec:
-                found = True
-                break
-            if item.get('prefix_mode') == mode: count += 1
+        if mode:
+            # Calculate index in group
+            count = 0
+            found = False
+            for item in self.recordings:
+                if item is rec:
+                    found = True
+                    break
+                if item.get('prefix_mode') == mode: count += 1
             
-        if not found: return text # Should not happen unless deleted
+            if found:
+                prefix = self.generate_prefix(count, mode)
         
-        # Generate prefix
-        prefix = self.generate_prefix(count, mode)
-        return prefix + text
+        # Calculate Postfix
+        postfix = ""
+        postfix_mode = rec.get('postfix_mode')
+        if postfix_mode:
+            if postfix_mode == "space": postfix = " "
+            elif postfix_mode == ", comma": postfix = ", "
+            elif postfix_mode == ". dot": postfix = ". "
+            
+        return prefix + text + postfix
 
     def update_gui_list(self, select_index=None):
         # Dispatch to queue with optional selection index
@@ -146,8 +154,13 @@ class VoiceInputterApp:
             prefix_mode = None
             if self.gui.prefix_var.get():
                 prefix_mode = self.gui.prefix_mode_var.get()
+                
+            # Capture Postfix Mode
+            postfix_mode = None
+            if self.gui.postfix_var.get():
+                postfix_mode = self.gui.postfix_mode_var.get()
 
-            entry = {'file': filename, 'text': "", 'prefix_mode': prefix_mode}
+            entry = {'file': filename, 'text': "", 'prefix_mode': prefix_mode, 'postfix_mode': postfix_mode}
             self.recordings.append(entry)
             index = len(self.recordings) - 1
             self.update_gui_list()
@@ -222,7 +235,7 @@ class VoiceInputterApp:
             # Request UI Update (will calc prefixes)
             self.queue.put(("refresh_ui_list", None))
             
-            if should_send and self.gui.auto_process_var.get():
+            if should_send and self.gui.auto_send_var.get():
                  self.queue.put(("send_text_for_rec", rec))
 
     def coordinator_loop(self):

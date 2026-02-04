@@ -16,5 +16,6 @@ The system uses a multi-threaded architecture with a central Coordinator Loop to
 
 ## Key Patterns
 -   **Concurrent Recording/Processing:** The decoupling of audio capture and transcription allows the user to record new clips immediately while previous ones are being processed in the background.
+-   **Separation of Transcription and Output:** The system distinguishes between "Auto-Process" (transcribing audio to text) and "Auto-Send" (typing text to window). This allows users to review or queue transcriptions before sending.
 -   **Dynamic Prefixes:** Prefixes (e.g., "1.", "a)") are calculated dynamically based on the item's current position in the list relative to other items of the same type. This ensures prefixes remain correct even after reordering or deleting items.
 -   **State Management:** The UI reflects both audio state (Recording vs Ready) and processing state (Processing vs Idle) without blocking user interaction.
