@@ -28,7 +28,7 @@ jobs:
         pyinstaller --noconfirm --onefile --windowed --name "VoiceInputter" --add-data "stt.json;." voice_inputter.py
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: VoiceInputter-EXE
         path: dist/VoiceInputter.exe
