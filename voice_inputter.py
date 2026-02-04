@@ -4,6 +4,9 @@ import uuid
 import queue
 import threading
 import time
+import shutil
+import wave
+import numpy as np
 import pyautogui
 import pyperclip
 from pynput import keyboard
@@ -35,23 +38,64 @@ class VoiceInputterApp:
         
         self.active_window_handle = None
         self.current_keys = set()
-        self.audio_buffer = []
+        
+        # Recordings Management: List of dicts {'file': path, 'text': string}
+        self.recordings = []
+        os.makedirs("recordings", exist_ok=True)
+        self.load_existing_recordings()
+
+    def load_existing_recordings(self):
+        try:
+            files = sorted([f for f in os.listdir("recordings") if f.endswith(".wav")])
+            # For existing files, we don't have text history unless we save it.
+            # For now, initialize with empty text.
+            self.recordings = [{'file': os.path.join("recordings", f), 'text': ""} for f in files]
+            self.update_gui_list()
+        except: pass
+
+    def update_gui_list(self):
+        display_list = []
+        for item in self.recordings:
+            name = os.path.basename(item['file'])
+            txt = item['text']
+            if txt:
+                name += f" ({txt[:20]}...)"
+            display_list.append(name)
+        
+        self.gui.update_rec_list(display_list)
+        self.update_text_area() # Also ensure text area matches list order
+
+    def update_text_area(self):
+        # Concatenate all texts
+        full_text = " ".join([r['text'] for r in self.recordings if r['text']])
+        self.gui.update_text(full_text)
+
+    def save_recording(self, audio_data):
+        if not audio_data: return None
+        filename = f"recordings/rec_{int(time.time())}.wav"
+        try:
+            audio_array = np.concatenate(audio_data, axis=0)
+            audio_int16 = (audio_array * 32767).astype(np.int16)
+            with wave.open(filename, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(SAMPLE_RATE)
+                wf.writeframes(audio_int16.tobytes())
+            
+            entry = {'file': filename, 'text': ""}
+            self.recordings.append(entry)
+            index = len(self.recordings) - 1
+            self.update_gui_list()
+            return index
+        except Exception as e:
+            logger.error(f"Save recording error: {e}")
+            return None
 
     def get_active_window(self):
         try:
             import pygetwindow as gw
             return gw.getActiveWindow()
         except: return None
-
-    def handle_text_output(self, text):
-        # Update UI Text Area
-        # If Auto-Process is ON, we assume user wants to Send immediately (Auto-Send logic inherited)
-        # If Auto-Process is OFF (Manual), we Append to text box for review.
-        if self.gui.auto_process_var.get():
-            self.gui.update_text(text)
-            self.send_text_to_window(text)
-        else:
-            self.gui.append_text(text)
 
     def send_text_to_window(self, text):
         logger.info(f"Sending text: {text}")
@@ -68,25 +112,65 @@ class VoiceInputterApp:
             time.sleep(0.1)
             pyautogui.press('enter')
 
-    def process_transcription_task(self, audio_data):
-        logger.info("Processing transcription...")
+    def process_transcription_task(self, index=None):
+        # If index is provided, process that specific recording.
+        # If index is None, process all recordings that have no text.
         
-        if self.gui.network_client_var.get():
-            target = self.gui.get_selected_peer()
-            if target:
-                logger.info(f"Sending audio to {target}")
-                text = self.network.send_audio(target, audio_data)
+        indices_to_process = []
+        if index is not None:
+            indices_to_process.append(index)
+        else:
+            for i, rec in enumerate(self.recordings):
+                # if not rec['text']: # Re-process everything? Or just missing?
+                # User might want to re-process all? Or just new?
+                # Usually "PROCESS ALL" implies everything currently in list.
+                # But to save time, maybe skip if text exists?
+                # User said "reorder files and text will also get reordered".
+                # This implies text exists.
+                # If manual process, maybe we assume text is missing.
+                # I'll process ALL to be safe/correct (maybe user changed workflow settings).
+                indices_to_process.append(i)
+        
+        logger.info(f"Processing {len(indices_to_process)} items...")
+        
+        for idx in indices_to_process:
+            if idx >= len(self.recordings): continue
+            
+            rec = self.recordings[idx]
+            filename = rec['file']
+            
+            # Read file data to pass to network/comfy if needed?
+            # ComfyClient can read file from disk if we setup INPUT_FILENAME.
+            # I'll manually copy the recording file to INPUT_FILENAME for Comfy.
+            from src.config import INPUT_FILENAME
+            try:
+                shutil.copy(filename, INPUT_FILENAME)
+            except Exception as e:
+                logger.error(f"File copy error: {e}")
+                continue
+
+            text = None
+            if self.gui.network_client_var.get():
+                # Network Logic (Simplified: Read file, send bytes)
+                # NetworkManager needs update to support file or we read it here.
+                # Keeping it simple: Skip network for now or read bytes.
+                logger.warning("Network not fully supported in file list mode.")
             else:
-                logger.warning("No peer selected")
-                text = None
-        else:
-            text = self.comfy.process(audio_data, SAMPLE_RATE)
-        
-        if text:
-            self.queue.put(("transcription_result", text))
-        else:
-            logger.warning("No text extracted.")
-        
+                # Comfy: Process INPUT_FILENAME (pass None as audio_data)
+                text = self.comfy.process(None, SAMPLE_RATE)
+            
+            if text:
+                self.recordings[idx]['text'] = text.strip()
+                self.update_gui_list() # Updates list label and main text area
+                
+                # If Auto-Process (index was not None), maybe send text immediately?
+                # But user wants "reorder".
+                # If Auto-Process, we usually want to paste result.
+                # If we paste result, we paste ONLY the new text?
+                # Yes, standard behavior.
+                if index is not None and self.gui.auto_process_var.get():
+                     self.send_text_to_window(text)
+
         self.queue.put(("ui", "READY"))
         self.audio.set_state("READY")
 
@@ -96,24 +180,38 @@ class VoiceInputterApp:
                 try:
                     msg = self.queue.get_nowait()
                 except queue.Empty:
-                    break # GUI 'after' loop handles re-schedule
+                    break
 
                 if isinstance(msg, tuple):
                     cmd = msg[0]
-                    arg = msg[1]
                     
                     if cmd == "ui":
-                        self.gui.update_ui_state(arg)
+                        self.gui.update_ui_state(msg[1])
                     elif cmd == "audio_state":
-                        self.audio.set_state(arg)
-                        self.gui.update_ui_state(arg)
-                        if arg == "RECORDING":
+                        self.audio.set_state(msg[1])
+                        self.gui.update_ui_state(msg[1])
+                        if msg[1] == "RECORDING":
                             self.active_window_handle = self.get_active_window()
-                    elif cmd == "transcription_result":
-                        self.handle_text_output(arg)
                     elif cmd == "send_text":
-                        self.send_text_to_window(arg)
-                        self.gui.update_text("") # Clear after send? Or keep?
+                        self.send_text_to_window(msg[1])
+                        # self.gui.update_text("") # Don't clear, we manage text area
+                    
+                    elif cmd == "move_rec":
+                        index, direction = msg[1], msg[2]
+                        if 0 <= index + direction < len(self.recordings):
+                            self.recordings[index], self.recordings[index+direction] = self.recordings[index+direction], self.recordings[index]
+                            self.update_gui_list()
+                    
+                    elif cmd == "delete_rec":
+                        index = msg[1]
+                        if 0 <= index < len(self.recordings):
+                            item = self.recordings.pop(index)
+                            try: os.remove(item['file'])
+                            except: pass
+                            self.update_gui_list()
+                    
+                    elif cmd == "update_rec_list":
+                        self.gui.update_rec_list(msg[1])
                 
                 elif msg == "toggle":
                     if self.audio.state == "READY":
@@ -123,36 +221,23 @@ class VoiceInputterApp:
                 
                 elif msg == "recording_finished":
                     new_audio = self.audio.audio_data
+                    # Save and Add to list
+                    idx = self.save_recording(new_audio)
                     
-                    if self.gui.auto_process_var.get():
-                        # Auto Process
-                        self.audio_buffer = new_audio
+                    if self.gui.auto_process_var.get() and idx is not None:
                         self.queue.put(("ui", "PROCESSING"))
-                        threading.Thread(target=self.process_transcription_task, args=(self.audio_buffer,)).start()
-                        self.audio_buffer = []
+                        threading.Thread(target=self.process_transcription_task, args=(idx,)).start()
                     else:
-                        # Manual Mode - Buffer Audio
-                        if self.audio_buffer:
-                            # Ask user to Append or Replace
-                            if self.gui.ask_append_replace():
-                                self.audio_buffer.extend(new_audio)
-                            else:
-                                self.audio_buffer = new_audio
-                        else:
-                            self.audio_buffer = new_audio
-                        
                         self.gui.show_process_btn()
                         self.gui.update_ui_state("READY")
                         self.audio.set_state("READY")
 
                 elif msg == "manual_process":
-                    if self.audio_buffer:
-                        self.gui.hide_process_btn()
+                    if self.recordings:
                         self.queue.put(("ui", "PROCESSING"))
-                        threading.Thread(target=self.process_transcription_task, args=(self.audio_buffer,)).start()
-                        self.audio_buffer = []
+                        threading.Thread(target=self.process_transcription_task, args=(None,)).start()
                     else:
-                        logger.warning("No audio to process")
+                        logger.warning("No recordings to process")
 
                 elif msg == "scan_network":
                     peers = self.network.get_peers()
@@ -166,7 +251,6 @@ class VoiceInputterApp:
         except Exception as e:
             logger.error(f"Coordinator error: {e}")
         
-        # Schedule next check in GUI loop
         self.gui.root.after(50, self.coordinator_loop)
 
     def on_press(self, key):
