@@ -2,7 +2,7 @@
 
 A Python automation tool that integrates with a local ComfyUI API for advanced voice-to-text input. It records audio, processes it through a ComfyUI workflow (using Whisper), and types the result directly into your active window.
 
-![UI Screenshot](https://via.placeholder.com/350x550?text=VoiceInputter+UI) <!-- Replace with actual screenshot if available -->
+![UI Screenshot](screenshot.png)
 
 ## Key Features
 
