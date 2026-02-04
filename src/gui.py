@@ -85,8 +85,7 @@ class Overlay:
         self.send_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
 
         self.process_btn = tk.Button(self.frame, text="PROCESS ALL", command=self.manual_process, bg="#FF9800", fg="white", font=("Arial", 9, "bold"))
-        # Not hidden by default for now, unless list is empty? Or keep logic.
-        # User wants to process the list.
+        self.process_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
 
         # Options Frame
         opts_frame = tk.Frame(self.frame, bg="#333333")
