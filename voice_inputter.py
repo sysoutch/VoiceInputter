@@ -17,6 +17,7 @@ from src.gui import Overlay
 from src.audio import AudioManager
 from src.comfy import ComfyClient
 from src.network import NetworkManager
+from src.matrix_client import MatrixManager
 
 # Logging Setup
 logging.basicConfig(
@@ -38,6 +39,9 @@ class VoiceInputterApp:
         self.audio = AudioManager(self.queue, logger)
         self.comfy = ComfyClient(logger, self.client_id)
         self.network = NetworkManager(self.comfy, logger)
+        self.matrix_client = MatrixManager(logger, "UserClient") # User Client (Sender)
+        self.matrix_bot = MatrixManager(logger, "BotClient")    # Bot Client (Replier)
+        self.matrix_bot.register_callback(self.on_matrix_message)
         
         self.active_window_handle = None
         self.current_keys = set()
@@ -54,21 +58,37 @@ class VoiceInputterApp:
     def processing_worker(self):
         while True:
             try:
-                # Task is tuple: (recording_dict, should_send_text)
-                # Prefix settings are now stored in recording_dict, so we don't need to pass them in task
                 task = self.processing_queue.get()
                 
                 try:
                     logger.info(f"Processing worker got task.")
-                    # Handle legacy or new task format
-                    if len(task) >= 2:
-                        rec = task[0]
-                        should_send = task[1]
+                    
+                    if isinstance(task, dict) and task.get('type') == 'bot_audio':
+                        filename = task['file']
+                        room_id = task['room']
+                        logger.info(f"Bot processing audio: {filename}")
                         
-                    if not rec.get('deleted', False):
-                        self.process_single_item(rec, should_send)
+                        from src.config import INPUT_FILENAME
+                        try:
+                            shutil.copy(filename, INPUT_FILENAME)
+                            text = self.comfy.process(None, SAMPLE_RATE)
+                            if text:
+                                logger.info(f"Bot Result: {text}")
+                                self.matrix_bot.send_text(room_id, text)
+                        except Exception as e:
+                            logger.error(f"Bot processing error: {e}")
+                            
                     else:
-                        logger.info("Skipping deleted recording.")
+                        # Standard Logic
+                        if len(task) >= 2:
+                            rec = task[0]
+                            should_send = task[1]
+                            
+                        if not rec.get('deleted', False):
+                            self.process_single_item(rec, should_send)
+                        else:
+                            logger.info("Skipping deleted recording.")
+                            
                 except Exception as e:
                     logger.error(f"Processing worker error: {e}")
                 finally:
@@ -200,14 +220,23 @@ class VoiceInputterApp:
                 logger.error(f"Error finding target window: {e}")
         return target_handle
 
-    def send_text_to_window(self, text):
+    def send_text_to_window(self, text, use_stale_handle=True):
         should_focus = self.gui.focus_target_var.get()
         logger.info(f"Sending text: {text} | Focus: {should_focus}")
         
         target = self.gui.target_window_var.get()
-        target_handle = self.get_target_handle(target)
+        
+        # For Matrix messages, we typically want 'current active' not 'active when last recorded'
+        # unless user specifically selected a window in dropdown.
+        if target == "<Active Window>" and not use_stale_handle:
+            target_handle = None
+        else:
+            target_handle = self.get_target_handle(target)
 
         if target_handle:
+            if "VoiceInputter" in getattr(target_handle, 'title', ''):
+                logger.warning("Target is VoiceInputter itself! Text might not appear where expected.")
+            
             try:
                 if should_focus:
                     if not target_handle.isActive:
@@ -216,14 +245,17 @@ class VoiceInputterApp:
                             if target_handle.isMinimized:
                                 target_handle.restore()
                             target_handle.activate()
-                            time.sleep(0.3)
+                            time.sleep(0.5)
                         except Exception as e:
                             logger.error(f"Failed to activate window: {e}")
             except Exception as e:
                 logger.error(f"Window manipulation error: {e}")
         
         pyperclip.copy(text)
-        pyautogui.hotkey('ctrl', 'v')
+        try:
+            pyautogui.hotkey('ctrl', 'v')
+        except Exception as e:
+            logger.error(f"Paste failed: {e}")
         
         if self.gui.auto_enter_var.get():
             time.sleep(0.1)
@@ -254,21 +286,47 @@ class VoiceInputterApp:
         filename = rec['file']
         
         text = None
+        processed = False
+        
+        # Matrix Send
+        if self.gui.matrix_mode_var.get():
+            room_id = self.gui.matrix_room_var.get()
+            if room_id:
+                logger.info(f"Sending recording to Matrix Room {room_id}")
+                self.matrix_client.send_audio(room_id, filename)
+                processed = True
+            else:
+                logger.error("No Matrix Room ID provided!")
+
+        # Network Send
         if self.gui.network_client_var.get():
             peer = self.gui.get_selected_peer()
             if peer:
                 logger.info(f"Sending recording to {peer}")
                 text = self.network.send_audio_file(peer, filename)
+                processed = True
             else:
                 logger.error("No network peer selected!")
-        else:
+        
+        # Local Processing (only if no remote method was used, OR if explicit request? 
+        # For now: if not processed by others, do local. 
+        # But if Matrix is just for logging, maybe user still wants local text? 
+        # "send this... but also send to matrix". 
+        # This implies Matrix is ADDITIVE. 
+        # Network Client is usually REPLACEMENT.
+        
+        # Logic:
+        # If Network Client -> Use it for Text.
+        # If NOT Network Client -> Use Local for Text.
+        # If Matrix -> Send Copy.
+        
+        if not self.gui.network_client_var.get():
             from src.config import INPUT_FILENAME
             try:
                 shutil.copy(filename, INPUT_FILENAME)
+                text = self.comfy.process(None, SAMPLE_RATE)
             except Exception as e:
-                logger.error(f"File copy error: {e}")
-                return
-            text = self.comfy.process(None, SAMPLE_RATE)
+                logger.error(f"Local processing error: {e}")
         
         if text:
             if rec.get('deleted', False): return
@@ -280,6 +338,9 @@ class VoiceInputterApp:
             
             if should_send and self.gui.auto_send_var.get():
                  self.queue.put(("send_text_for_rec", rec))
+
+    def on_matrix_message(self, msg_type, content, room_id):
+        self.queue.put(("matrix_message", msg_type, content, room_id))
 
     def coordinator_loop(self):
         try:
@@ -352,6 +413,36 @@ class VoiceInputterApp:
                                 self.audio.set_device(real_idx)
                         except Exception as e:
                             logger.error(f"Set mic error: {e}")
+
+                    elif cmd == "matrix_connect":
+                        # msg = ("matrix_connect", u_serv, u_user, u_tok, b_serv, b_user, b_tok)
+                        try:
+                            # User Client
+                            if msg[1] and msg[2] and msg[3]:
+                                self.matrix_client.connect(msg[1], msg[2], msg[3])
+                            
+                            # Bot Client
+                            if len(msg) > 6 and msg[4] and msg[5] and msg[6]:
+                                self.matrix_bot.connect(msg[4], msg[5], msg[6])
+                        except Exception as e:
+                            logger.error(f"Matrix connect dispatch error: {e}")
+                    
+                    elif cmd == "matrix_message":
+                        msg_type, content, room_id = msg[1], msg[2], msg[3]
+                        if msg_type == "text":
+                            logger.info(f"Matrix Text Received: {content}")
+                            self.gui.append_text(f"[Matrix]: {content}")
+                            
+                            # Type the text if Auto-Send is enabled
+                            if self.gui.auto_send_var.get():
+                                # For remote messages, do not use the stale active window handle from previous local recordings
+                                self.send_text_to_window(content, use_stale_handle=False)
+                                
+                        elif msg_type == "audio":
+                            logger.info(f"Matrix Audio Received: {content}")
+                            self.processing_tasks_count += 1
+                            self.gui.set_processing_state(True)
+                            self.processing_queue.put({"type": "bot_audio", "file": content, "room": room_id})
                 
                 elif msg == "toggle":
                     if self.audio.state == "READY":
@@ -434,6 +525,8 @@ class VoiceInputterApp:
                 elif msg == "quit":
                     self.network.stop()
                     self.audio.stop()
+                    self.matrix_client.stop()
+                    self.matrix_bot.stop()
                     os._exit(0)
 
         except Exception as e:

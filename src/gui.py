@@ -2,12 +2,24 @@ import tkinter as tk
 from tkinter import messagebox
 import tkinter.ttk as ttk
 import queue
+import json
+import os
 
 class Overlay:
     def __init__(self, request_queue):
         self.queue = request_queue
         self.root = tk.Tk()
+        self.root.title("VoiceInputter")
         
+        # Load Secrets
+        secrets = {}
+        try:
+            if os.path.exists("secrets.json"):
+                with open("secrets.json", "r") as f:
+                    secrets = json.load(f)
+        except Exception as e:
+            print(f"Error loading secrets: {e}")
+
         # Variables
         self.vad_auto_stop_var = tk.BooleanVar(value=True)
         self.vad_trigger_var = tk.BooleanVar(value=False)
@@ -23,6 +35,18 @@ class Overlay:
         self.focus_target_var = tk.BooleanVar(value=True)
         self.always_on_top_var = tk.BooleanVar(value=True)
         self.network_client_var = tk.BooleanVar(value=False)
+        self.matrix_mode_var = tk.BooleanVar(value=False)
+        self.matrix_homeserver_var = tk.StringVar(value=secrets.get("matrix_homeserver", "https://matrix.org"))
+        self.matrix_user_var = tk.StringVar(value=secrets.get("matrix_user", ""))
+        self.matrix_token_var = tk.StringVar(value=secrets.get("matrix_token", ""))
+        self.matrix_room_var = tk.StringVar(value=secrets.get("matrix_room", ""))
+        
+        # Bot Variables
+        self.bot_matrix_homeserver_var = tk.StringVar(value=secrets.get("bot_matrix_homeserver", "https://matrix.org"))
+        self.bot_matrix_user_var = tk.StringVar(value=secrets.get("bot_matrix_user", ""))
+        self.bot_matrix_token_var = tk.StringVar(value=secrets.get("bot_matrix_token", ""))
+        self.bot_matrix_room_var = tk.StringVar(value=secrets.get("bot_matrix_room", ""))
+        
         self.vad_threshold_var = tk.StringVar(value="0.01")
         self.vad_silence_var = tk.StringVar(value="2.0")
         self.mic_device_var = tk.StringVar()
@@ -207,6 +231,10 @@ class Overlay:
         self.chk_network = tk.Checkbutton(opts_frame, text="Network Client", var=self.network_client_var, command=self.toggle_network_ui,
                                              bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
         self.chk_network.pack(anchor="w")
+        
+        self.chk_matrix = tk.Checkbutton(opts_frame, text="Matrix Client", var=self.matrix_mode_var, command=self.toggle_matrix_ui,
+                                             bg="#333333", fg="white", selectcolor="#555555", activebackground="#333333", activeforeground="white")
+        self.chk_matrix.pack(anchor="w")
 
         # Network Frame
         self.network_frame = tk.Frame(self.frame, bg="#333333")
@@ -214,6 +242,64 @@ class Overlay:
         self.combo_peers.pack(side=tk.LEFT, padx=5)
         self.btn_scan = tk.Button(self.network_frame, text="Scan", command=self.manual_scan, bg="#FF9800", fg="white", font=("Arial", 8))
         self.btn_scan.pack(side=tk.LEFT)
+
+        # Matrix Frame
+        self.matrix_frame = tk.Frame(self.frame, bg="#333333")
+        
+        # Notebook for User/Bot tabs
+        self.matrix_notebook = ttk.Notebook(self.matrix_frame)
+        self.matrix_notebook.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # User Tab
+        self.user_tab = tk.Frame(self.matrix_notebook, bg="#333333")
+        self.matrix_notebook.add(self.user_tab, text="User (Sender)")
+        
+        u_row1 = tk.Frame(self.user_tab, bg="#333333")
+        u_row1.pack(fill=tk.X, pady=2)
+        tk.Label(u_row1, text="Server:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(u_row1, textvariable=self.matrix_homeserver_var, bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        u_row2 = tk.Frame(self.user_tab, bg="#333333")
+        u_row2.pack(fill=tk.X, pady=2)
+        tk.Label(u_row2, text="User:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(u_row2, textvariable=self.matrix_user_var, bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        u_row3 = tk.Frame(self.user_tab, bg="#333333")
+        u_row3.pack(fill=tk.X, pady=2)
+        tk.Label(u_row3, text="Token:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(u_row3, textvariable=self.matrix_token_var, show="*", bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        u_row4 = tk.Frame(self.user_tab, bg="#333333")
+        u_row4.pack(fill=tk.X, pady=2)
+        tk.Label(u_row4, text="Room:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(u_row4, textvariable=self.matrix_room_var, bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Bot Tab
+        self.bot_tab = tk.Frame(self.matrix_notebook, bg="#333333")
+        self.matrix_notebook.add(self.bot_tab, text="Bot (Replier)")
+        
+        b_row1 = tk.Frame(self.bot_tab, bg="#333333")
+        b_row1.pack(fill=tk.X, pady=2)
+        tk.Label(b_row1, text="Server:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(b_row1, textvariable=self.bot_matrix_homeserver_var, bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        b_row2 = tk.Frame(self.bot_tab, bg="#333333")
+        b_row2.pack(fill=tk.X, pady=2)
+        tk.Label(b_row2, text="User:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(b_row2, textvariable=self.bot_matrix_user_var, bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        b_row3 = tk.Frame(self.bot_tab, bg="#333333")
+        b_row3.pack(fill=tk.X, pady=2)
+        tk.Label(b_row3, text="Token:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(b_row3, textvariable=self.bot_matrix_token_var, show="*", bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        b_row4 = tk.Frame(self.bot_tab, bg="#333333")
+        b_row4.pack(fill=tk.X, pady=2)
+        tk.Label(b_row4, text="Room:", bg="#333333", fg="white", width=6).pack(side=tk.LEFT)
+        tk.Entry(b_row4, textvariable=self.bot_matrix_room_var, bg="#555555", fg="white").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.btn_matrix_connect = tk.Button(self.matrix_frame, text="Connect All", command=self.connect_matrix, bg="#9C27B0", fg="white", font=("Arial", 9))
+        self.btn_matrix_connect.pack(fill=tk.X, pady=5)
 
         # Close Button
         self.close_btn = tk.Button(self.frame, text="x", command=self.quit_app, bg="#333333", fg="white", font=("Arial", 8), bd=0)
@@ -277,6 +363,14 @@ class Overlay:
                 pass
     def manual_scan_windows(self): self.queue.put("scan_windows")
     def manual_focus_target(self): self.queue.put("focus_target")
+    def connect_matrix(self):
+        self.queue.put(("matrix_connect", 
+                        self.matrix_homeserver_var.get(),
+                        self.matrix_user_var.get(),
+                        self.matrix_token_var.get(),
+                        self.bot_matrix_homeserver_var.get(),
+                        self.bot_matrix_user_var.get(),
+                        self.bot_matrix_token_var.get()))
     def quit_app(self):
         self.queue.put("quit")
     
@@ -285,6 +379,11 @@ class Overlay:
             self.network_frame.pack(fill=tk.X, padx=10, pady=5)
             self.manual_scan()
         else: self.network_frame.pack_forget()
+
+    def toggle_matrix_ui(self):
+        if self.matrix_mode_var.get():
+            self.matrix_frame.pack(fill=tk.X, padx=10, pady=5)
+        else: self.matrix_frame.pack_forget()
 
     def update_peers(self, peers):
         self.combo_peers['values'] = peers

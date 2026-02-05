@@ -16,7 +16,15 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
 ### 🌐 Network Mode
 - **Network Client:** Can send recorded audio to another VoiceInputter instance for processing (useful for offloading heavy inference).
 
-### 📝 Smart Text Processing
+### 💬 Matrix Integration
+This feature allows you to offload transcription to a separate machine (the "Bot") via a Matrix room.
+
+**The Workflow:**
+1. **Send:** Your local VoiceInputter (Client) records audio and sends it to the Matrix room.
+2. **Process:** The remote VoiceInputter (Bot) downloads the audio, processes it through its local ComfyUI, and sends the transcribed text back to the room.
+3. **Type:** Your local Client receives the text from the room and automatically types it into your selected window.
+
+###  Smart Text Processing
 - **Dynamic Prefixes:** Automatically add prefixes to your text with smart reordering support:
   - `1., 2., 3.` (Numbered list that auto-updates when you reorder items)
   - `a), b), c)` (Lettered list)
@@ -43,6 +51,24 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
 - Python 3.10+
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) running locally on port 8188.
 - A ComfyUI workflow saved as `stt.json` (must include "Apply Whisper" and "Preview Text" nodes).
+
+## Configuration
+
+To avoid entering your credentials every time, you can create a `secrets.json` file in the root directory. This file is ignored by Git for security.
+
+```json
+{
+    "matrix_homeserver": "https://matrix.org",
+    "matrix_user": "@your_user:matrix.org",
+    "matrix_token": "your_access_token",
+    "matrix_room": "!your_room_id:matrix.org",
+
+    "bot_matrix_homeserver": "https://matrix.org",
+    "bot_matrix_user": "@your_bot:matrix.org",
+    "bot_matrix_token": "your_bot_access_token",
+    "bot_matrix_room": "!your_room_id:matrix.org"
+}
+```
 
 ## Installation
 

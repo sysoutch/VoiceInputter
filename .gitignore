@@ -12,3 +12,4 @@ dist/
 *.spec
 *.exe
 recordings/
+secrets.json
