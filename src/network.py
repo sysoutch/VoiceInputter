@@ -98,6 +98,22 @@ class NetworkManager:
     def get_peers(self):
         return list(self.peers.keys())
 
+    def send_audio_file(self, target_ip, filename):
+        try:
+            url = f"http://{target_ip}:{PORT}/transcribe"
+            with open(filename, 'rb') as f:
+                files = {"file": ("audio.wav", f, "audio/wav")}
+                resp = requests.post(url, files=files, timeout=30)
+            
+            if resp.status_code == 200:
+                return resp.text
+            else:
+                self.logger.error(f"Network error: {resp.status_code} - {resp.text}")
+                return None
+        except Exception as e:
+            self.logger.error(f"Network send error: {e}")
+            return None
+
     def send_audio(self, target_ip, audio_data):
         # Convert audio_data (list of numpy arrays) to bytes
         try:

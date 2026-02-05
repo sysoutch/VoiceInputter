@@ -253,17 +253,21 @@ class VoiceInputterApp:
     def process_single_item(self, rec, should_send):
         filename = rec['file']
         
-        from src.config import INPUT_FILENAME
-        try:
-            shutil.copy(filename, INPUT_FILENAME)
-        except Exception as e:
-            logger.error(f"File copy error: {e}")
-            return
-
         text = None
         if self.gui.network_client_var.get():
-            logger.warning("Network not fully supported in file list mode.")
+            peer = self.gui.get_selected_peer()
+            if peer:
+                logger.info(f"Sending recording to {peer}")
+                text = self.network.send_audio_file(peer, filename)
+            else:
+                logger.error("No network peer selected!")
         else:
+            from src.config import INPUT_FILENAME
+            try:
+                shutil.copy(filename, INPUT_FILENAME)
+            except Exception as e:
+                logger.error(f"File copy error: {e}")
+                return
             text = self.comfy.process(None, SAMPLE_RATE)
         
         if text:

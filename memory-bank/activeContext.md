@@ -1,27 +1,26 @@
 # Active Context: VoiceInputter
 
 ## Current Focus
-- Finalizing UI features and preparing for local build.
-- Updating documentation.
+- Polishing release candidate.
+- Distributing build.
 
 ## Recent Changes
+- **Microphone Selection:** Added dropdown for selecting audio input device with real-time switching logic.
+- **Network Client:** Implemented audio file transmission to peer instances for offloaded processing.
+- **Build:** Created local executable with PyInstaller.
 - Implemented **concurrent processing**: Recording and transcription are now decoupled, allowing continuous input while processing happens in the background.
 - Added **dynamic prefixes**: Supports numbered lists ("1.", "2.") and lettered lists ("a)", "b)") that auto-update on reorder.
 - Enhanced UI:
-    - **Target Window Selection**: Dropdown to select a specific application window as the target for text output, independent of focus.
-    - **Focus Target Controls**: "Focus" toggle to control auto-activation, and "Go" button to manually activate the selected target window.
-    - **Auto-Send**: New toggle to separate transcription from typing. Allows processing without immediate output.
-    - **Postfix Support**: New option to append characters (space, comma, dot) to the transcribed text.
-    - **Center Window**: Application starts centered.
-    - **Clear All**: Button to remove all recordings.
+    - **Target Window Selection**: Dropdown to select a specific application window as the target for text output.
+    - **Focus Target Controls**: "Focus" toggle to control auto-activation, and "Go" button to manually activate.
+    - **Postfix Support**: New option to append characters.
     - **Auto-Enter Modes**: Dropdown for "enter", "shift+enter", "ctrl+enter".
-    - **Selection Preservation**: List selection follows item movement and deletion.
-- Modularized code into `src/`.
 
 ## Next Steps
-- Create local build with PyInstaller.
-- Push final changes to GitHub.
+- Push changes to GitHub.
+- Create new release tag.
 
 ## Active Decisions and Considerations
+- **Network Mode:** Currently sends raw .wav files via HTTP POST to the peer's `/transcribe` endpoint.
+- **Audio Device Switching:** Requires closing and re-opening the `sounddevice` stream to take effect reliably.
 - **Concurrency:** Using a `processing_queue` ensures ComfyUI tasks run sequentially without blocking the UI or audio capture.
-- **Dynamic Prefixes:** Calculated on-the-fly during UI updates to handle reordering seamlessly.

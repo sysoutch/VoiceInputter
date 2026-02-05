@@ -264,20 +264,17 @@ class Overlay:
     def on_mic_selected(self, event):
         idx = self.combo_mic.current()
         if idx >= 0:
-            print(f"DEBUG: Mic selection index {idx}")
             self.queue.put(("set_mic", idx))
         else:
-            print(f"DEBUG: Mic selection index invalid: {idx}")
             # Try to find by value
             try:
                 val = self.combo_mic.get()
                 values = self.combo_mic['values']
                 if val in values:
                     idx = values.index(val)
-                    print(f"DEBUG: Found mic by value: {idx}")
                     self.queue.put(("set_mic", idx))
             except Exception as e:
-                print(f"DEBUG: Mic selection error: {e}")
+                pass
     def manual_scan_windows(self): self.queue.put("scan_windows")
     def manual_focus_target(self): self.queue.put("focus_target")
     def quit_app(self):

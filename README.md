@@ -7,10 +7,14 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
 ## Key Features
 
 ### 🎙️ Advanced Audio Control
+- **Microphone Selection:** Select your preferred input device from a dropdown list with real-time switching.
 - **Voice Activity Detection (VAD):**
   - **Auto-Stop:** Automatically stops recording when you stop speaking.
   - **Voice Trigger:** Automatically starts recording when you begin speaking.
 - **Concurrent Processing:** Record a new clip immediately while the previous one is being transcribed. No waiting required.
+
+### 🌐 Network Mode
+- **Network Client:** Can send recorded audio to another VoiceInputter instance for processing (useful for offloading heavy inference).
 
 ### 📝 Smart Text Processing
 - **Dynamic Prefixes:** Automatically add prefixes to your text with smart reordering support:
