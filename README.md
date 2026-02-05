@@ -13,37 +13,26 @@ A Python automation tool that integrates with a local ComfyUI API for advanced v
   - **Voice Trigger:** Automatically starts recording when you begin speaking.
 - **Concurrent Processing:** Record a new clip immediately while the previous one is being transcribed. No waiting required.
 
-### 🌐 Network Mode
+### 🌐 Network & Matrix Modes
 - **Network Client:** Can send recorded audio to another VoiceInputter instance for processing (useful for offloading heavy inference).
+- **Matrix Integration:** Offload transcription to a separate machine (the "Bot") via a Matrix room.
+  - **The Workflow:** 
+    1. **Send:** Your local Client records and uploads audio to the room.
+    2. **Process:** The remote Bot transcribes it via local ComfyUI and replies with text.
+    3. **Type:** Your local Client receives the text and types it into your selected window.
 
-### 💬 Matrix Integration
-This feature allows you to offload transcription to a separate machine (the "Bot") via a Matrix room.
+### 🧠 Smart Text Processing
+- **Language Selection:** Choose your transcription language dynamically (English, German, Auto, etc.) via a dropdown that fetches options directly from ComfyUI.
+- **Smart Spacing:** Automatically handles spaces between successive transcriptions only when line breaks are not triggered.
+- **Dynamic Prefixes:** Automatically add prefixes like `1.`, `2.`, `3.`, `a)`, `b)`, `- ` which auto-update on reorder.
+- **Postfix Support:** Automatically append characters like `Space`, `Comma`, or `Dot`.
+- **Auto-Enter Modes:** Choose how the text is submitted: `Enter`, `Shift+Enter`, or `Ctrl+Enter`.
 
-**The Workflow:**
-1. **Send:** Your local VoiceInputter (Client) records audio and sends it to the Matrix room.
-2. **Process:** The remote VoiceInputter (Bot) downloads the audio, processes it through its local ComfyUI, and sends the transcribed text back to the room.
-3. **Type:** Your local Client receives the text from the room and automatically types it into your selected window.
-
-###  Smart Text Processing
-- **Dynamic Prefixes:** Automatically add prefixes to your text with smart reordering support:
-  - `1., 2., 3.` (Numbered list that auto-updates when you reorder items)
-  - `a), b), c)` (Lettered list)
-  - `- ` (Bullet points)
-- **Postfix Support:** Automatically append characters to the end of the text:
-  - `Space`, `Comma`, or `Dot`.
-- **Auto-Enter Modes:** Choose how the text is submitted:
-  - `Enter` (Standard)
-  - `Shift+Enter` (New line without sending)
-  - `Ctrl+Enter` (Submit in forms)
-
-### 🖥️ Desktop Integration
-- **Always-on-Top Overlay:** A compact, draggable interface that stays visible over your applications.
-- **Auto-Send Toggle:** Option to disable automatic typing, allowing you to review transcriptions in the list before sending.
-- **Target Window Selection:** Choose a specific open application to receive text input, or stick to the default "Active Window" mode.
-- **Focus Controls:** 
-  - **Toggle:** Enable/disable auto-focusing the target window before typing.
-  - **Manual Focus (Go):** Button to instantly activate the selected target window.
-- **Auto-Type:** Automatically pastes the transcribed text into the selected target window (if Auto-Send is enabled).
+### 🖥️ Modern Native Interface
+- **PyQt6 GUI:** A responsive, dark-themed native window with full resizing support.
+- **Always-on-Top Overlay:** Stays visible over your applications for easy monitoring.
+- **Target Window Selection:** Choose a specific application to receive text input, or stick to the default "Active Window" mode.
+- **Focus Controls:** Auto-focus the target window before typing or manually activate it with the "Go" button.
 - **Clipboard Management:** Uses clipboard injection for fast and reliable text entry.
 
 ## Requirements
@@ -90,13 +79,9 @@ To avoid entering your credentials every time, you can create a `secrets.json` f
     ```bash
     python voice_inputter.py
     ```
-    *Or run the built executable if available.*
 3.  **Controls:**
     - **F9 (Global Hotkey):** Toggle recording manually.
-    - **UI Controls:** Use the overlay to toggle VAD settings, change prefix modes, or manage the recording queue.
-4.  **Workflow:**
-    - Select a text field in any application (e.g., Notepad, Discord, ChatGPT).
-    - Speak. The app records, transcribes, and types the text for you.
+    - **UI Controls:** Use the interface to toggle VAD settings, change prefix modes, or manage the recording queue.
 
 ## Building from Source
 
@@ -110,10 +95,9 @@ To create a standalone executable:
     ```bash
     pyinstaller --onefile --windowed --add-data "stt.json;." voice_inputter.py
     ```
-3.  The executable will be located in the `dist/` folder.
 
 ## Project Structure
 
-- `src/`: Core modules (Audio, GUI, Network, ComfyUI client).
+- `src/`: Core modules (Audio, GUI, Matrix, Network, ComfyUI client).
 - `voice_inputter.py`: Main entry point and coordinator.
 - `stt.json`: The ComfyUI workflow definition.

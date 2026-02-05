@@ -60,7 +60,7 @@ class Overlay(QMainWindow):
         # Window Setup
         self.setWindowTitle("VoiceInputter")
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(380, 650)
+        self.resize(380, 700)
         
         # Load Secrets
         secrets = {}
@@ -99,6 +99,7 @@ class Overlay(QMainWindow):
         self.vad_threshold_var = StringVar("0.01")
         self.vad_silence_var = StringVar("2.0")
         self.mic_device_var = StringVar("")
+        self.language_var = StringVar("auto")
         
         self.current_state = "READY"
         self.is_processing = False
@@ -243,35 +244,46 @@ class Overlay(QMainWindow):
         mic_layout.addWidget(btn_refresh_mic)
         gen_layout.addLayout(mic_layout)
         
-        # VAD
+        # VAD Auto-Stop Row (Side by Side)
+        vad_stop_layout = QHBoxLayout()
         chk_stop = QCheckBox("Auto-Stop")
         self.vad_auto_stop_var.attach(chk_stop, self.update_settings)
-        gen_layout.addWidget(chk_stop)
+        vad_stop_layout.addWidget(chk_stop)
         
-        vad_layout = QHBoxLayout()
-        vad_layout.addWidget(QLabel("Silence (s):"))
+        vad_stop_layout.addStretch()
+        vad_stop_layout.addWidget(QLabel("Silence (s):"))
         txt_sil = QLineEdit()
         self.vad_silence_var.attach(txt_sil)
         txt_sil.setFixedWidth(50)
-        vad_layout.addWidget(txt_sil)
-        gen_layout.addLayout(vad_layout)
+        vad_stop_layout.addWidget(txt_sil)
+        gen_layout.addLayout(vad_stop_layout)
         
+        # VAD Trigger Row (Side by Side)
+        vad_trig_layout = QHBoxLayout()
         chk_trig = QCheckBox("Record on Voice")
         self.vad_trigger_var.attach(chk_trig, self.update_settings)
-        gen_layout.addWidget(chk_trig)
+        vad_trig_layout.addWidget(chk_trig)
         
-        thresh_layout = QHBoxLayout()
-        thresh_layout.addWidget(QLabel("Threshold:"))
+        vad_trig_layout.addStretch()
+        vad_trig_layout.addWidget(QLabel("Threshold:"))
         txt_th = QLineEdit()
         self.vad_threshold_var.attach(txt_th)
         txt_th.setFixedWidth(50)
-        thresh_layout.addWidget(txt_th)
-        gen_layout.addLayout(thresh_layout)
+        vad_trig_layout.addWidget(txt_th)
+        gen_layout.addLayout(vad_trig_layout)
         
         chk_proc = QCheckBox("Auto-Process")
         self.auto_process_var.attach(chk_proc)
         gen_layout.addWidget(chk_proc)
         
+        # Language Selection
+        lang_layout = QHBoxLayout()
+        lang_layout.addWidget(QLabel("Language:"))
+        self.cmb_lang = QComboBox()
+        self.language_var.attach(self.cmb_lang)
+        lang_layout.addWidget(self.cmb_lang, 1)
+        gen_layout.addLayout(lang_layout)
+
         gen_layout.addStretch()
 
         # Text Tab
@@ -364,26 +376,18 @@ class Overlay(QMainWindow):
         self.matrix_mode_var.attach(chk_mat, self.toggle_matrix_ui)
         conn_layout.addWidget(chk_mat)
         
-        self.btn_matrix = QPushButton("Configure Matrix")
-        self.btn_matrix.clicked.connect(self.open_matrix_window)
-        conn_layout.addWidget(self.btn_matrix)
-        self.btn_matrix.setVisible(False)
+        # Matrix Configuration Frame (Embedded)
+        self.matrix_frame = QWidget()
+        mat_layout = QVBoxLayout(self.matrix_frame)
+        mat_layout.setContentsMargins(0, 0, 0, 0)
         
-        conn_layout.addStretch()
-
-    # --- Matrix Window ---
-    def open_matrix_window(self):
-        self.win_matrix = QWidget()
-        self.win_matrix.setWindowTitle("Matrix Config")
-        self.win_matrix.resize(400, 500)
-        layout = QVBoxLayout(self.win_matrix)
+        self.matrix_tabs = QTabWidget()
+        mat_layout.addWidget(self.matrix_tabs)
         
-        tabs = QTabWidget()
-        layout.addWidget(tabs)
-        
-        def make_tab(prefix, server_var, user_var, token_var, room_var):
+        def make_tab(server_var, user_var, token_var, room_var):
             w = QWidget()
             l = QVBoxLayout(w)
+            l.setContentsMargins(5, 5, 5, 5)
             
             def row(lbl, var, echo=QLineEdit.EchoMode.Normal):
                 h = QHBoxLayout()
@@ -401,14 +405,17 @@ class Overlay(QMainWindow):
             l.addStretch()
             return w
             
-        tabs.addTab(make_tab("User", self.matrix_homeserver_var, self.matrix_user_var, self.matrix_token_var, self.matrix_room_var), "User (Sender)")
-        tabs.addTab(make_tab("Bot", self.bot_matrix_homeserver_var, self.bot_matrix_user_var, self.bot_matrix_token_var, self.bot_matrix_room_var), "Bot (Replier)")
+        self.matrix_tabs.addTab(make_tab(self.matrix_homeserver_var, self.matrix_user_var, self.matrix_token_var, self.matrix_room_var), "Client (User)")
+        self.matrix_tabs.addTab(make_tab(self.bot_matrix_homeserver_var, self.bot_matrix_user_var, self.bot_matrix_token_var, self.bot_matrix_room_var), "Server (Bot)")
         
-        btn_con = QPushButton("Connect All")
+        btn_con = QPushButton("Connect Matrix")
         btn_con.clicked.connect(self.connect_matrix)
-        layout.addWidget(btn_con)
+        mat_layout.addWidget(btn_con)
         
-        self.win_matrix.show()
+        conn_layout.addWidget(self.matrix_frame)
+        self.matrix_frame.setVisible(False)
+        
+        conn_layout.addStretch()
 
     # --- Interaction Logic ---
     # Standard OS window handles move/resize
@@ -479,7 +486,7 @@ class Overlay(QMainWindow):
         if self.network_client_var.get(): self.manual_scan()
         
     def toggle_matrix_ui(self):
-        self.btn_matrix.setVisible(self.matrix_mode_var.get())
+        self.matrix_frame.setVisible(self.matrix_mode_var.get())
 
     # Lists
     def update_rec_list(self, items, select_index=None):
@@ -497,6 +504,14 @@ class Overlay(QMainWindow):
     def update_peers(self, peers):
         self.cmb_peers.clear()
         self.cmb_peers.addItems(peers)
+
+    def update_languages(self, languages):
+        current = self.cmb_lang.currentText()
+        self.cmb_lang.clear()
+        self.cmb_lang.addItems(languages)
+        idx = self.cmb_lang.findText(current)
+        if idx >= 0: self.cmb_lang.setCurrentIndex(idx)
+        elif "auto" in languages: self.cmb_lang.setCurrentIndex(languages.index("auto"))
 
     def update_mic_list(self, devices, current_index=None):
         self.cmb_mic.blockSignals(True)

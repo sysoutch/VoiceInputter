@@ -29,6 +29,23 @@ class ComfyClient:
             self.logger.error(f"Failed to load workflow file: {e}")
             return {}
 
+    def get_languages(self):
+        """Try to fetch available languages from the Apply Whisper node dynamically."""
+        try:
+            resp = requests.get(f"http://{COMFY_URL}/object_info", timeout=3)
+            if resp.status_code == 200:
+                data = resp.json()
+                if "Apply Whisper" in data:
+                    inputs = data["Apply Whisper"].get("input", {})
+                    # Usually required -> language -> [0] is type, [1] is config with choices
+                    lang_info = inputs.get("required", {}).get("language", [])
+                    if len(lang_info) > 1 and isinstance(lang_info[1], dict):
+                        choices = lang_info[1].get("choices")
+                        if choices: return choices
+        except: pass
+        # Fallback
+        return ["auto", "English", "German", "French", "Italian", "Spanish", "Japanese", "Chinese"]
+
     def save_audio(self, audio_data, sample_rate):
         if not audio_data: return False
         audio_array = np.concatenate(audio_data, axis=0)
@@ -40,23 +57,13 @@ class ComfyClient:
             wf.writeframes(audio_int16.tobytes())
         return True
 
-    def upload_audio(self):
-        try:
-            with open(INPUT_FILENAME, 'rb') as f:
-                files = {"image": (INPUT_FILENAME, f), "overwrite": (None, "true")}
-                requests.post(f"http://{COMFY_URL}/upload/image", files=files, timeout=5)
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to upload audio: {e}")
-            return False
-
     def find_node(self, key, value):
         for node_id, node in self.workflow.items():
             if key == "class_type" and node.get("class_type") == value: return node_id
             if key == "title" and node.get("_meta", {}).get("title") == value: return node_id
         return None
 
-    def process(self, audio_data, sample_rate):
+    def process(self, audio_data, sample_rate, language="auto"):
         if audio_data is not None:
             if not self.save_audio(audio_data, sample_rate):
                 return None
@@ -67,6 +74,9 @@ class ComfyClient:
             self.workflow[load_node_id]["inputs"]["audio"] = abs_path
 
         whisper_node_id = self.find_node("class_type", "Apply Whisper")
+        if whisper_node_id:
+            self.workflow[whisper_node_id]["inputs"]["language"] = language
+            
         preview_text_node_id = self.find_node("title", "Preview Text")
         if not whisper_node_id: whisper_node_id = "98"
 

@@ -1,10 +1,13 @@
 numpy
 sounddevice
-websocket-client
+scipy
 requests
+websocket-client
 pynput
-pyautogui
 pyperclip
+pyautogui
 pygetwindow
-pyinstaller
+packaging
+pillow
 matrix-nio
+PyQt6

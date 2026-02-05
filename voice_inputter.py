@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 class VoiceInputterApp:
     def __init__(self):
         self.queue = queue.Queue()
+        self.last_item_had_enter = True # Assume true initially to avoid space on first item
         self.processing_queue = queue.Queue()
         self.processing_tasks_count = 0
         self.client_id = str(uuid.uuid4())
@@ -71,7 +72,8 @@ class VoiceInputterApp:
                         from src.config import INPUT_FILENAME
                         try:
                             shutil.copy(filename, INPUT_FILENAME)
-                            text = self.comfy.process(None, SAMPLE_RATE)
+                            lang = self.gui.language_var.get()
+                            text = self.comfy.process(None, SAMPLE_RATE, language=lang)
                             if text:
                                 logger.info(f"Bot Result: {text}")
                                 self.matrix_bot.send_text(room_id, text)
@@ -157,7 +159,17 @@ class VoiceInputterApp:
             display_list.append(name)
         
         self.gui.update_rec_list(display_list, select_index)
-        self.gui.update_text(" ".join(full_text_parts))
+        
+        # Logic for separator in preview area
+        if self.gui.auto_enter_var.get():
+            separator = "\n"
+        elif self.gui.postfix_var.get():
+            # If postfix is on, each part already has its separator (space, comma, etc)
+            separator = ""
+        else:
+            separator = " "
+            
+        self.gui.update_text(separator.join(full_text_parts))
 
     def save_recording(self, audio_data):
         if not audio_data: return None
@@ -308,23 +320,13 @@ class VoiceInputterApp:
             else:
                 logger.error("No network peer selected!")
         
-        # Local Processing (only if no remote method was used, OR if explicit request? 
-        # For now: if not processed by others, do local. 
-        # But if Matrix is just for logging, maybe user still wants local text? 
-        # "send this... but also send to matrix". 
-        # This implies Matrix is ADDITIVE. 
-        # Network Client is usually REPLACEMENT.
-        
-        # Logic:
-        # If Network Client -> Use it for Text.
-        # If NOT Network Client -> Use Local for Text.
-        # If Matrix -> Send Copy.
-        
+        # Local Processing
         if not self.gui.network_client_var.get():
             from src.config import INPUT_FILENAME
             try:
                 shutil.copy(filename, INPUT_FILENAME)
-                text = self.comfy.process(None, SAMPLE_RATE)
+                lang = self.gui.language_var.get()
+                text = self.comfy.process(None, SAMPLE_RATE, language=lang)
             except Exception as e:
                 logger.error(f"Local processing error: {e}")
         
@@ -367,7 +369,13 @@ class VoiceInputterApp:
                         rec = msg[1]
                         if not rec.get('deleted', False):
                             text = self.calculate_full_text(rec)
+                            had_enter = self.gui.auto_enter_var.get()
+                            
+                            if not had_enter and not self.last_item_had_enter:
+                                text = " " + text
+                            
                             self.send_text_to_window(text)
+                            self.last_item_had_enter = had_enter
                     
                     elif cmd == "move_rec":
                         index, direction = msg[1], msg[2]
@@ -549,8 +557,10 @@ class VoiceInputterApp:
         self.network.start()
         self.sync_settings()
         
-        # Initial mic scan
+        # Initial scans
         self.queue.put("scan_mics")
+        langs = self.comfy.get_languages()
+        self.gui.update_languages(langs)
         
         listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         listener.start()
