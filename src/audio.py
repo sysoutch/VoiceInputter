@@ -21,6 +21,8 @@ class AudioManager:
         self.use_voice_trigger = False
         self.silence_duration = VAD_SILENCE_DURATION
         self.threshold = VAD_THRESHOLD
+        self.device_index = None
+        self.device_changed = False
         
         # Start Loop
         self.thread = threading.Thread(target=self.audio_loop, daemon=True)
@@ -45,6 +47,23 @@ class AudioManager:
                 self.threshold = float(threshold)
             except: pass
 
+    def get_devices(self):
+        try:
+            devices = sd.query_devices()
+            input_devices = []
+            for i, d in enumerate(devices):
+                if d['max_input_channels'] > 0:
+                    input_devices.append((i, d['name']))
+            return input_devices
+        except Exception as e:
+            self.logger.error(f"Error querying devices: {e}")
+            return []
+
+    def set_device(self, index):
+        self.device_index = index
+        self.device_changed = True
+        self.logger.info(f"Selected audio device index: {index}")
+
     def set_state(self, state):
         self.state = state
 
@@ -62,6 +81,16 @@ class AudioManager:
         stream = None
         
         while self.running:
+            # Check device change
+            if self.device_changed:
+                if stream:
+                    try:
+                        stream.stop()
+                        stream.close()
+                    except: pass
+                    stream = None
+                self.device_changed = False
+
             # Determine if we need stream
             # We need stream if RECORDING, or if READY and Voice Trigger is enabled
             need_stream = (self.state == "RECORDING") or \
@@ -70,11 +99,24 @@ class AudioManager:
             # Manage Stream State
             if need_stream and stream is None:
                 try:
-                    stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1)
+                    stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, device=self.device_index)
                     stream.start()
-                    self.logger.info("Audio Stream Started")
+                    
+                    device_name = "Default"
+                    if self.device_index is not None:
+                        try:
+                            device_name = sd.query_devices(self.device_index)['name']
+                        except:
+                            device_name = f"Index {self.device_index}"
+                    else:
+                        try:
+                            # query default input device
+                            device_name = sd.query_devices(kind='input')['name']
+                        except: pass
+
+                    self.logger.info(f"Audio Stream Started (Device: {device_name})")
                 except Exception as e:
-                    self.logger.error(f"Failed to start stream: {e}")
+                    self.logger.error(f"Failed to start stream with device {self.device_index}: {e}")
                     time.sleep(1)
                     continue
             

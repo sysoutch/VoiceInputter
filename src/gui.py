@@ -25,6 +25,7 @@ class Overlay:
         self.network_client_var = tk.BooleanVar(value=False)
         self.vad_threshold_var = tk.StringVar(value="0.01")
         self.vad_silence_var = tk.StringVar(value="2.0")
+        self.mic_device_var = tk.StringVar()
         
         # State
         self.drag_data = {"x": 0, "y": 0}
@@ -104,6 +105,19 @@ class Overlay:
 
         self.process_btn = tk.Button(self.frame, text="PROCESS ALL", command=self.manual_process, bg="#FF9800", fg="white", font=("Arial", 9, "bold"))
         self.process_btn.pack(pady=(0, 5), fill=tk.X, padx=10)
+
+        # Mic Selection
+        mic_frame = tk.Frame(self.frame, bg="#333333")
+        mic_frame.pack(fill=tk.X, padx=10, pady=(5, 0))
+        
+        tk.Label(mic_frame, text="Mic:", bg="#333333", fg="white").pack(side=tk.LEFT)
+        
+        self.combo_mic = ttk.Combobox(mic_frame, textvariable=self.mic_device_var, width=25, state="readonly")
+        self.combo_mic.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        self.combo_mic.bind("<<ComboboxSelected>>", self.on_mic_selected)
+        
+        self.btn_refresh_mic = tk.Button(mic_frame, text="↻", command=self.manual_scan_mics, bg="#555555", fg="white", font=("Arial", 8), width=2)
+        self.btn_refresh_mic.pack(side=tk.LEFT)
 
         # Options Frame
         opts_frame = tk.Frame(self.frame, bg="#333333")
@@ -246,6 +260,24 @@ class Overlay:
         if text: self.queue.put(("send_text", text))
     def manual_process(self): self.queue.put("manual_process")
     def manual_scan(self): self.queue.put("scan_network")
+    def manual_scan_mics(self): self.queue.put("scan_mics")
+    def on_mic_selected(self, event):
+        idx = self.combo_mic.current()
+        if idx >= 0:
+            print(f"DEBUG: Mic selection index {idx}")
+            self.queue.put(("set_mic", idx))
+        else:
+            print(f"DEBUG: Mic selection index invalid: {idx}")
+            # Try to find by value
+            try:
+                val = self.combo_mic.get()
+                values = self.combo_mic['values']
+                if val in values:
+                    idx = values.index(val)
+                    print(f"DEBUG: Found mic by value: {idx}")
+                    self.queue.put(("set_mic", idx))
+            except Exception as e:
+                print(f"DEBUG: Mic selection error: {e}")
     def manual_scan_windows(self): self.queue.put("scan_windows")
     def manual_focus_target(self): self.queue.put("focus_target")
     def quit_app(self):
@@ -261,6 +293,15 @@ class Overlay:
         self.combo_peers['values'] = peers
         if peers and not self.combo_peers.get(): self.combo_peers.current(0)
     def get_selected_peer(self): return self.combo_peers.get()
+    
+    def update_mic_list(self, devices, current_index=None):
+        self.combo_mic['values'] = devices
+        if devices:
+            if current_index is not None and 0 <= current_index < len(devices):
+                self.combo_mic.current(current_index)
+            elif not self.combo_mic.get():
+                try: self.combo_mic.current(0)
+                except: pass
 
     def update_window_list(self, windows):
         current = self.target_window_var.get()

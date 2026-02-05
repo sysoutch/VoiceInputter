@@ -41,6 +41,7 @@ class VoiceInputterApp:
         
         self.active_window_handle = None
         self.current_keys = set()
+        self.mic_devices = []
         
         # Recordings Management: List of dicts {'file': path, 'text': string, 'prefix_mode': str/None, 'deleted': bool}
         self.recordings = []
@@ -336,6 +337,17 @@ class VoiceInputterApp:
                         if self.processing_tasks_count > 0:
                             self.processing_tasks_count -= 1
                         self.gui.set_processing_state(self.processing_tasks_count > 0)
+
+                    elif cmd == "set_mic":
+                        try:
+                            selection_idx = msg[1]
+                            if 0 <= selection_idx < len(self.mic_devices):
+                                real_idx = self.mic_devices[selection_idx][0]
+                                name = self.mic_devices[selection_idx][1]
+                                logger.info(f"Setting mic to: {name} (Index: {real_idx})")
+                                self.audio.set_device(real_idx)
+                        except Exception as e:
+                            logger.error(f"Set mic error: {e}")
                 
                 elif msg == "toggle":
                     if self.audio.state == "READY":
@@ -383,6 +395,15 @@ class VoiceInputterApp:
                 elif msg == "scan_network":
                     peers = self.network.get_peers()
                     self.gui.update_peers(peers)
+
+                elif msg == "scan_mics":
+                    try:
+                        devices = self.audio.get_devices()
+                        self.mic_devices = devices
+                        display_names = [f"{d[1]} ({d[0]})" for d in devices]
+                        self.gui.update_mic_list(display_names)
+                    except Exception as e:
+                        logger.error(f"Scan mics error: {e}")
                 
                 elif msg == "scan_windows":
                     try:
@@ -430,6 +451,9 @@ class VoiceInputterApp:
         logger.info("VoiceInputter started.")
         self.network.start()
         self.sync_settings()
+        
+        # Initial mic scan
+        self.queue.put("scan_mics")
         
         listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         listener.start()
