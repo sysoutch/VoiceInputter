@@ -133,7 +133,7 @@ class Overlay(QMainWindow):
         self.vad_trigger_var = BooleanVar(False)
         self.auto_process_var = BooleanVar(True)
         self.auto_send_var = BooleanVar(True)
-        self.auto_enter_var = BooleanVar(True)
+        self.auto_enter_var = BooleanVar(False)
         self.auto_enter_mode_var = StringVar("enter")
         self.prefix_var = BooleanVar(False)
         self.prefix_mode_var = StringVar("- ")
