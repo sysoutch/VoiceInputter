@@ -1,103 +1,89 @@
 # VoiceInputter
 
-A Python automation tool that integrates with a local ComfyUI API for advanced voice-to-text input. It records audio, processes it through a ComfyUI workflow (using Whisper), and types the result directly into your active window.
+VoiceInputter is a modern, native Windows tool that turns your voice into text and types it directly into any application. By leveraging local AI power (via ComfyUI/Whisper), it provides high-accuracy transcription with minimal latency and full control over your data.
 
 ![UI Screenshot](screenshot.png)
 
-## Key Features
+---
 
-### 🎙️ Advanced Audio Control
-- **Microphone Selection:** Select your preferred input device from a dropdown list with real-time switching.
-- **Voice Activity Detection (VAD):**
-  - **Auto-Stop:** Automatically stops recording when you stop speaking.
-  - **Voice Trigger:** Automatically starts recording when you begin speaking.
-- **Concurrent Processing:** Record a new clip immediately while the previous one is being transcribed. No waiting required.
+## 🚀 Key Features
 
-### 🌐 Network & Matrix Modes
-- **Network Client:** Can send recorded audio to another VoiceInputter instance for processing (useful for offloading heavy inference).
-- **Matrix Integration:** Offload transcription to a separate machine (the "Bot") via a Matrix room.
-  - **The Workflow:** 
-    1. **Send:** Your local Client records and uploads audio to the room.
-    2. **Process:** The remote Bot transcribes it via local ComfyUI and replies with text.
-    3. **Type:** Your local Client receives the text and types it into your selected window.
+### 🎙️ Effortless Control
+- **Standard Native Interface:** A professional PyQt6 window that is responsive, resizable, and fits perfectly in your Windows workflow.
+- **Configurable Hotkeys:** Set your own global toggle combination (e.g., `CTRL+F9`) or even repetitive sequences (e.g., `F8+F8`).
+- **Voice Trigger (VAD):** Automatically start recording when you speak and stop when you're finished.
+
+- **Microphone Selection:** Easily switch between different input devices directly from the UI.
 
 ### 🧠 Smart Text Processing
-- **Language Selection:** Choose your transcription language dynamically (English, German, Auto, etc.) via a dropdown that fetches options directly from ComfyUI.
-- **Smart Spacing:** Automatically handles spaces between successive transcriptions only when line breaks are not triggered.
-- **Dynamic Prefixes:** Automatically add prefixes like `1.`, `2.`, `3.`, `a)`, `b)`, `- ` which auto-update on reorder.
-- **Postfix Support:** Automatically append characters like `Space`, `Comma`, or `Dot`.
-- **Auto-Enter Modes:** Choose how the text is submitted: `Enter`, `Shift+Enter`, or `Ctrl+Enter`.
+- **Multi-Language Support:** Choose specific languages or let the AI auto-detect what you're saying. Options are dynamically synced with your AI engine.
+- **Smart Spacing:** Automatically adds spaces between successive transcriptions so your sentences flow naturally.
+- **Dynamic Formatting:** Supports auto-numbering, bullet points, and custom prefixes/postfixes that update as you work.
+- **Auto-Enter Modes:** Choose how text is submitted (Enter, Shift+Enter, etc.) to match the behavior of different apps and chat platforms.
 
-### 🖥️ Modern Native Interface
-- **PyQt6 GUI:** A responsive, dark-themed native window with full resizing support.
-- **Always-on-Top Overlay:** Stays visible over your applications for easy monitoring.
-- **Target Window Selection:** Choose a specific application to receive text input, or stick to the default "Active Window" mode.
-- **Focus Controls:** Auto-focus the target window before typing or manually activate it with the "Go" button.
-- **Clipboard Management:** Uses clipboard injection for fast and reliable text entry.
+### 🌐 Advanced Connectivity
+- **Matrix Integration:** Turn any machine into a transcription server or send voice clips directly to your Matrix rooms for remote processing.
+- **LAN Network Mode:** Offload the heavy AI processing to another powerful PC on your local network.
 
-## Requirements
+---
 
-- Python 3.10+
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) running locally on port 8188.
-- A ComfyUI workflow saved as `stt.json` (must include "Apply Whisper" and "Preview Text" nodes).
+## 🛠️ User Setup
 
-## Configuration
+### 1. Requirements
+- **Windows 10/11**
+- **ComfyUI** running locally (or on a network machine) on port `8188`.
+- A ComfyUI workflow saved as `stt.json` in the app directory (must include "Apply Whisper" and "Preview Text" nodes).
 
-To avoid entering your credentials every time, you can create a `secrets.json` file in the root directory. This file is ignored by Git for security.
+### 2. Getting Started
+1.  Download the latest `voice_inputter.exe`.
+2.  Ensure your ComfyUI instance is running.
+3.  Launch the app.
+4.  Select your target window, press **F9**, and start speaking!
 
+### 3. Configuration
+For automated login to Matrix or Network modes, you can create a `secrets.json` file:
 ```json
 {
     "matrix_homeserver": "https://matrix.org",
     "matrix_user": "@your_user:matrix.org",
     "matrix_token": "your_access_token",
-    "matrix_room": "!your_room_id:matrix.org",
-
-    "bot_matrix_homeserver": "https://matrix.org",
-    "bot_matrix_user": "@your_bot:matrix.org",
-    "bot_matrix_token": "your_bot_access_token",
-    "bot_matrix_room": "!your_room_id:matrix.org"
+    "matrix_room": "!your_room_id:matrix.org"
 }
 ```
 
-## Installation
+---
 
+## 👨‍💻 Developer Section
+
+### Prerequisites
+- Python 3.10+
+- `pip install -r requirements.txt`
+
+### Development Setup
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/sysoutch/VoiceInputter.git
     cd VoiceInputter
     ```
-
-2.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-## Usage
-
-1.  **Start ComfyUI:** Ensure your local ComfyUI instance is running.
-2.  **Launch the App:**
+2.  **Run in development mode:**
     ```bash
     python voice_inputter.py
     ```
-3.  **Controls:**
-    - **F9 (Global Hotkey):** Toggle recording manually.
-    - **UI Controls:** Use the interface to toggle VAD settings, change prefix modes, or manage the recording queue.
 
-## Building from Source
+### Building from Source
+We use PyInstaller to create the standalone executable:
+```bash
+pyinstaller --onefile --windowed --add-data "stt.json;." voice_inputter.py
+```
 
-To create a standalone executable:
+### Project Structure
+- `src/gui.py`: Modern PyQt6 interface and layout logic.
+- `src/comfy.py`: API client for ComfyUI with dynamic workflow injection.
+- `src/matrix_client.py`: Dual-client Matrix protocol integration.
+- `src/audio.py`: Low-latency audio capture and VAD management.
+- `voice_inputter.py`: Central coordinator and event loop.
 
-1.  Install PyInstaller:
-    ```bash
-    pip install pyinstaller
-    ```
-2.  Run the build command:
-    ```bash
-    pyinstaller --onefile --windowed --add-data "stt.json;." voice_inputter.py
-    ```
-
-## Project Structure
-
-- `src/`: Core modules (Audio, GUI, Matrix, Network, ComfyUI client).
-- `voice_inputter.py`: Main entry point and coordinator.
-- `stt.json`: The ComfyUI workflow definition.
+### Internal Logic
+- **Threaded Architecture:** UI, Audio capture, and AI processing run on separate threads to ensure a lag-free experience.
+- **Dynamic Injection:** The app modifies the STT workflow JSON in-memory before execution to inject parameters like language selection.
+- **State Machine:** Uses a central event queue to manage transitions between Ready, Recording, and Processing states.

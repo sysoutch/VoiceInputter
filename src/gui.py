@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QTextEdit, QListWidget, QCheckBox, 
-                             QComboBox, QTabWidget, QLineEdit, QFrame, QScrollArea, QStyleFactory)
+                             QComboBox, QTabWidget, QLineEdit, QFrame, QScrollArea, QStyleFactory,
+                             QDialog)
 from PyQt6.QtCore import Qt, QTimer, QSize
-from PyQt6.QtGui import QPalette, QColor, QFont, QIcon
+from PyQt6.QtGui import QPalette, QColor, QFont, QIcon, QKeyEvent
 import sys
 import json
 import os
@@ -48,6 +49,63 @@ class StringVar:
     def attach(self, widget):
         self.widget = widget
         self.set(self._value)
+
+class HotkeyRecorderDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Record Hotkey")
+        self.setFixedSize(300, 150)
+        self.setModal(True)
+        self.recorded_keys = set()
+        self.recorded_names = []
+        
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Press your hotkey combination..."), alignment=Qt.AlignmentFlag.AlignCenter)
+        self.lbl_keys = QLabel("Waiting...")
+        self.lbl_keys.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        layout.addWidget(self.lbl_keys, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        btn_box = QHBoxLayout()
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.clicked.connect(self.reject)
+        btn_box.addWidget(btn_cancel)
+        self.btn_save = QPushButton("Save")
+        self.btn_save.setEnabled(False)
+        self.btn_save.clicked.connect(self.accept)
+        btn_box.addWidget(self.btn_save)
+        layout.addLayout(btn_box)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.isAutoRepeat(): return
+        
+        key = event.key()
+        # Map Qt Key to something useful or just store the text
+        name = event.text().upper()
+        if not name or key < 32 or key > 126:
+            # Special key
+            if key == Qt.Key.Key_Control: name = "CTRL"
+            elif key == Qt.Key.Key_Shift: name = "SHIFT"
+            elif key == Qt.Key.Key_Alt: name = "ALT"
+            elif key == Qt.Key.Key_Meta: name = "META"
+            elif key == Qt.Key.Key_F1: name = "F1"
+            elif key == Qt.Key.Key_F2: name = "F2"
+            elif key == Qt.Key.Key_F3: name = "F3"
+            elif key == Qt.Key.Key_F4: name = "F4"
+            elif key == Qt.Key.Key_F5: name = "F5"
+            elif key == Qt.Key.Key_F6: name = "F6"
+            elif key == Qt.Key.Key_F7: name = "F7"
+            elif key == Qt.Key.Key_F8: name = "F8"
+            elif key == Qt.Key.Key_F9: name = "F9"
+            elif key == Qt.Key.Key_F10: name = "F10"
+            elif key == Qt.Key.Key_F11: name = "F11"
+            elif key == Qt.Key.Key_F12: name = "F12"
+            else: name = QKeyEvent.key_to_name(key).upper()
+        
+        # Allow multiple same keys (e.g. F8+F8)
+        self.recorded_names.append(name)
+        self.lbl_keys.setText("+".join(self.recorded_names))
+        self.btn_save.setEnabled(True)
+        event.accept()
 
 class Overlay(QMainWindow):
     def __init__(self, request_queue):
@@ -100,6 +158,7 @@ class Overlay(QMainWindow):
         self.vad_silence_var = StringVar("2.0")
         self.mic_device_var = StringVar("")
         self.language_var = StringVar("auto")
+        self.hotkey_var = StringVar("F9")
         
         self.current_state = "READY"
         self.is_processing = False
@@ -227,9 +286,9 @@ class Overlay(QMainWindow):
         self.container_layout.addWidget(self.tabs)
         
         # General Tab
-        tab_gen = QWidget()
-        self.tabs.addTab(tab_gen, "General")
-        gen_layout = QVBoxLayout(tab_gen)
+        self.tab_gen = QWidget()
+        self.tabs.addTab(self.tab_gen, "General")
+        gen_layout = QVBoxLayout(self.tab_gen)
         
         # Mic
         mic_layout = QHBoxLayout()
@@ -275,6 +334,10 @@ class Overlay(QMainWindow):
         chk_proc = QCheckBox("Auto-Process")
         self.auto_process_var.attach(chk_proc)
         gen_layout.addWidget(chk_proc)
+
+        chk_send = QCheckBox("Auto-Send")
+        self.auto_send_var.attach(chk_send)
+        gen_layout.addWidget(chk_send)
         
         # Language Selection
         lang_layout = QHBoxLayout()
@@ -290,10 +353,6 @@ class Overlay(QMainWindow):
         tab_text = QWidget()
         self.tabs.addTab(tab_text, "Text")
         text_layout = QVBoxLayout(tab_text)
-        
-        chk_send = QCheckBox("Auto-Send")
-        self.auto_send_var.attach(chk_send)
-        text_layout.addWidget(chk_send)
         
         # Auto Enter
         ae_layout = QHBoxLayout()
@@ -351,6 +410,22 @@ class Overlay(QMainWindow):
         text_layout.addLayout(foc_layout)
         
         text_layout.addStretch()
+
+        # Hotkeys Tab
+        self.tab_hk = QWidget()
+        self.tabs.addTab(self.tab_hk, "Hotkeys")
+        hk_layout = QVBoxLayout(self.tab_hk)
+        
+        hk_row = QHBoxLayout()
+        hk_row.addWidget(QLabel("Global Toggle:"))
+        self.lbl_hk = QLabel("F9")
+        self.lbl_hk.setStyleSheet("background: #1e1e1e; padding: 5px; border-radius: 3px;")
+        hk_row.addWidget(self.lbl_hk)
+        self.btn_hk_record = QPushButton("Record")
+        self.btn_hk_record.clicked.connect(self.record_hotkey)
+        hk_row.addWidget(self.btn_hk_record)
+        hk_layout.addLayout(hk_row)
+        hk_layout.addStretch()
         
         # Connect Tab
         tab_conn = QWidget()
@@ -531,6 +606,19 @@ class Overlay(QMainWindow):
 
     def on_mic_selected(self, index):
         self.queue.put(("set_mic", index))
+
+    def record_hotkey(self):
+        dlg = HotkeyRecorderDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            display = "+".join(dlg.recorded_names)
+            self.lbl_hk.setText(display)
+            # Pass names to voice_inputter to map to pynput keys
+            self.queue.put(("set_hotkey_names", dlg.recorded_names))
+
+    def update_hotkey_display(self, text):
+        self.lbl_hk.setText(text)
+        self.btn_hk_record.setText("Record")
+        self.btn_hk_record.setEnabled(True)
 
     def move_rec(self, direction):
         row = self.list_recordings.currentRow()

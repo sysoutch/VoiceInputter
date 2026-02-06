@@ -31,6 +31,12 @@ class VoiceInputterApp:
     def __init__(self):
         self.queue = queue.Queue()
         self.last_item_had_enter = True # Assume true initially to avoid space on first item
+        self.is_recording_hotkey = False
+        self.recorded_hotkey_parts = []
+        self.target_hotkey_sequence = []
+        self.current_tap_sequence = []
+        self.last_tap_time = 0
+        
         self.processing_queue = queue.Queue()
         self.processing_tasks_count = 0
         self.client_id = str(uuid.uuid4())
@@ -402,9 +408,49 @@ class VoiceInputterApp:
                     elif cmd == "update_text_area":
                         self.gui.update_text(msg[1])
                     
+                    elif cmd == "update_languages":
+                        self.gui.update_languages(msg[1])
+                    
+                    elif cmd == "update_hotkey_display":
+                        self.gui.update_hotkey_display(msg[1])
+                    
                     elif cmd == "refresh_ui_list":
                          select_index = msg[1] if len(msg) > 1 else None
                          self._perform_ui_update(select_index)
+                    
+                    elif cmd == "record_hotkey":
+                        self.is_recording_hotkey = True
+                        self.recorded_hotkey_parts = []
+                    
+                    elif cmd == "set_hotkey_names":
+                        names = msg[1]
+                        self.target_hotkey_sequence = []
+                        from src.config import HOTKEY
+                        HOTKEY.clear()
+                        
+                        for n in names:
+                            # Map common names back to pynput Key objects
+                            k = None
+                            if n == "CTRL": k = keyboard.Key.ctrl_l
+                            elif n == "SHIFT": k = keyboard.Key.shift
+                            elif n == "ALT": k = keyboard.Key.alt_l
+                            elif n == "META": k = keyboard.Key.cmd
+                            elif n.startswith("F") and len(n) > 1:
+                                try: k = getattr(keyboard.Key, n.lower())
+                                except: pass
+                            
+                            if not k:
+                                # Try character
+                                if len(n) == 1: k = keyboard.KeyCode.from_char(n.lower())
+                                else:
+                                    try: k = getattr(keyboard.Key, n.lower())
+                                    except: pass
+                            
+                            if k: 
+                                self.target_hotkey_sequence.append(k)
+                                HOTKEY.add(k)
+                        
+                        logger.info(f"Hotkey updated to: {self.target_hotkey_sequence}")
                         
                     elif cmd == "processing_complete":
                         if self.processing_tasks_count > 0:
@@ -543,24 +589,63 @@ class VoiceInputterApp:
         self.gui.root.after(50, self.coordinator_loop)
 
     def on_press(self, key):
-        if key in HOTKEY:
-            self.current_keys.add(key)
-            if all(k in self.current_keys for k in HOTKEY):
-                self.queue.put("toggle")
+        if self.is_recording_hotkey:
+            self.recorded_hotkey_parts.append(key)
+            return
+
+        # Check for multi-tap/sequence hotkey
+        now = time.time()
+        if now - self.last_tap_time > 0.5: # 500ms timeout between taps
+            self.current_tap_sequence = []
+        
+        self.current_tap_sequence.append(key)
+        self.last_tap_time = now
+        
+        # Check if sequence matches
+        if self.target_hotkey_sequence and self.current_tap_sequence == self.target_hotkey_sequence:
+            self.queue.put("toggle")
+            self.current_tap_sequence = [] # Reset after trigger
+            return
+
+        # Only use chord logic if we don't have a multi-part sequence defined
+        # This prevents "F8+F8" from triggering on the first "F8"
+        if len(self.target_hotkey_sequence) <= 1:
+            from src.config import HOTKEY
+            if key in HOTKEY:
+                self.current_keys.add(key)
+                if all(k in self.current_keys for k in HOTKEY):
+                    self.queue.put("toggle")
 
     def on_release(self, key):
-        if key in self.current_keys:
-            self.current_keys.remove(key)
+        if self.is_recording_hotkey:
+            if self.recorded_hotkey_parts:
+                from src.config import HOTKEY
+                HOTKEY.clear()
+                HOTKEY.update(self.recorded_hotkey_parts)
+                
+                # Update UI display
+                names = []
+                for k in self.recorded_hotkey_parts:
+                    if hasattr(k, 'name') and k.name: names.append(k.name.upper())
+                    else: names.append(str(k).replace("Key.", "").replace("'", "").upper())
+                
+                display = "+".join(sorted(names))
+                # MUST update UI via queue (main thread)
+                self.queue.put(("update_hotkey_display", display))
+                
+                self.is_recording_hotkey = False
+                self.recorded_hotkey_parts = []
+            return
+
+        self.current_keys.discard(key)
 
     def run(self):
         logger.info("VoiceInputter started.")
         self.network.start()
         self.sync_settings()
         
-        # Initial scans
-        self.queue.put("scan_mics")
-        langs = self.comfy.get_languages()
-        self.gui.update_languages(langs)
+        # Initial scans in background to speed up startup
+        threading.Thread(target=self.initial_scans, daemon=True).start()
         
         listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         listener.start()
@@ -571,6 +656,14 @@ class VoiceInputterApp:
             self.gui.root.mainloop()
         except KeyboardInterrupt:
             pass
+
+    def initial_scans(self):
+        self.queue.put("scan_mics")
+        try:
+            langs = self.comfy.get_languages()
+            self.queue.put(("update_languages", langs))
+        except Exception as e:
+            logger.error(f"Background scan error: {e}")
 
     def sync_settings(self):
         self.audio.update_settings(
