@@ -1,22 +1,21 @@
 # Active Context: VoiceInputter
 
 ## Current Focus
-- Polishing release candidate.
-- Distributing build.
+- Finalizing integrations and UI structure.
+- Deployment preparation.
 
 ## Recent Changes
-- **GUI Migration (PyQt6):** Replaced legacy Tkinter UI with a modern, native-feeling PyQt6 interface. Features a dark Fusion theme, fully resizable window, and responsive layout where text areas and recording lists expand to fill space.
-- **Matrix Integration:** Implemented dual-client Matrix logic.
-    - **Client Mode:** Sends recorded audio to a Matrix room.
-    - **Bot Mode:** Receives audio from room -> transcribes locally -> sends text back to room. Also types received text messages into the active window.
-- **Dynamic Language Selection:** Added a Language dropdown in the General tab that dynamically fetches supported languages (auto, english, german, etc.) from the ComfyUI "Apply Whisper" node.
-- **Smart Spacing Logic:** Improved text injection to automatically handle spaces between successive transcriptions only when line breaks (Enter/Newline) are not triggered.
-- **Layout Refinement:** Inline VAD settings (Silence/Threshold next to toggles) and embedded Matrix configuration within the Connect tab.
+- **Telegram Bot Integration:** Added support for remote voice transcription via Telegram. Includes a dedicated connection tab and automatic transcription/reply logic.
+- **Startup Optimization:** Moved blocking operations (ComfyUI language scan, microphone discovery) to background threads, resulting in near-instant application launch.
+- **Robust Hotkey Recording:** Implemented a modal dialog for hotkey recording to ensure reliable capture of key combinations and multi-tap sequences.
+- **Advanced Hotkey Support:** Backend logic now supports repetitive key sequences (e.g., "F8+F8+F8") with timing-based multi-tap detection.
+- **UI Consolidation:** Centralized all critical workflow settings (Language, Auto-Send, Target Window, Focus) in the General tab for better accessibility.
+- **De-duplicated Device List:** Filtered the microphone list to remove redundant entries caused by multiple system APIs.
 
 ## Next Steps
 - Commit changes locally.
 
 ## Active Decisions and Considerations
-- **GUI Stack:** Switched to PyQt6 for better performance and standard window behavior (native resizing, DPI awareness).
-- **Matrix Workflow:** Uses a Client/Server (User/Bot) paradigm to allow remote transcription offloading.
-- **Language Injection:** Workflow JSON is modified in-memory before execution to inject the user-selected language into the Whisper node.
+- **Platform Expansion:** Telegram added as a secondary remote protocol alongside Matrix.
+- **UI Architecture:** Consolidating settings into the General tab based on user workflow priority (Setup -> Process -> Send -> Target).
+- **Concurrency:** Using thread-safe queues to bridge background services (Telegram, Matrix, Audio) with the PyQt6 main thread.

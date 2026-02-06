@@ -118,7 +118,7 @@ class Overlay(QMainWindow):
         # Window Setup
         self.setWindowTitle("VoiceInputter")
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(380, 700)
+        self.resize(380, 750)
         
         # Load Secrets
         secrets = {}
@@ -143,6 +143,7 @@ class Overlay(QMainWindow):
         self.focus_target_var = BooleanVar(True)
         self.network_client_var = BooleanVar(False)
         self.matrix_mode_var = BooleanVar(False)
+        self.telegram_mode_var = BooleanVar(False)
         
         self.matrix_homeserver_var = StringVar(secrets.get("matrix_homeserver", "https://matrix.org"))
         self.matrix_user_var = StringVar(secrets.get("matrix_user", ""))
@@ -153,6 +154,7 @@ class Overlay(QMainWindow):
         self.bot_matrix_user_var = StringVar(secrets.get("bot_matrix_user", ""))
         self.bot_matrix_token_var = StringVar(secrets.get("bot_matrix_token", ""))
         self.bot_matrix_room_var = StringVar(secrets.get("bot_matrix_room", ""))
+        self.telegram_token_var = StringVar(secrets.get("telegram_token", ""))
         
         self.vad_threshold_var = StringVar("0.01")
         self.vad_silence_var = StringVar("2.0")
@@ -236,13 +238,13 @@ class Overlay(QMainWindow):
         # --- Text Area ---
         self.txt_output = QTextEdit()
         self.txt_output.setMinimumHeight(45)
-        self.container_layout.addWidget(self.txt_output, 2) # Expand factor 1
+        self.container_layout.addWidget(self.txt_output, 2) # Expand factor 2
         
         # --- Recordings List ---
         self.container_layout.addWidget(QLabel("Recordings:"))
         self.list_recordings = QListWidget()
         self.list_recordings.setMinimumHeight(45)
-        self.container_layout.addWidget(self.list_recordings, 1)
+        self.container_layout.addWidget(self.list_recordings, 1) # Expand factor 1
         
         # List Controls
         list_ctrl_layout = QHBoxLayout()
@@ -335,10 +337,6 @@ class Overlay(QMainWindow):
         self.auto_process_var.attach(chk_proc)
         gen_layout.addWidget(chk_proc)
 
-        chk_send = QCheckBox("Auto-Send")
-        self.auto_send_var.attach(chk_send)
-        gen_layout.addWidget(chk_send)
-        
         # Language Selection
         lang_layout = QHBoxLayout()
         lang_layout.addWidget(QLabel("Language:"))
@@ -346,6 +344,32 @@ class Overlay(QMainWindow):
         self.language_var.attach(self.cmb_lang)
         lang_layout.addWidget(self.cmb_lang, 1)
         gen_layout.addLayout(lang_layout)
+
+        chk_send = QCheckBox("Auto-Send")
+        self.auto_send_var.attach(chk_send)
+        gen_layout.addWidget(chk_send)
+
+        # Target Selection
+        t_layout = QHBoxLayout()
+        t_layout.addWidget(QLabel("Target:"))
+        self.cmb_target = QComboBox()
+        self.cmb_target.addItem("<Active Window>")
+        self.target_window_var.attach(self.cmb_target)
+        t_layout.addWidget(self.cmb_target, 1)
+        btn_refresh_t = QPushButton("↻")
+        btn_refresh_t.setFixedWidth(24)
+        btn_refresh_t.clicked.connect(self.manual_scan_windows)
+        t_layout.addWidget(btn_refresh_t)
+        gen_layout.addLayout(t_layout)
+        
+        foc_layout = QHBoxLayout()
+        chk_foc = QCheckBox("Focus Target")
+        self.focus_target_var.attach(chk_foc)
+        foc_layout.addWidget(chk_foc)
+        btn_foc = QPushButton("Focus Now")
+        btn_foc.clicked.connect(self.manual_focus_target)
+        foc_layout.addWidget(btn_foc)
+        gen_layout.addLayout(foc_layout)
 
         gen_layout.addStretch()
 
@@ -386,28 +410,6 @@ class Overlay(QMainWindow):
         self.postfix_mode_var.attach(cmb_pf)
         pf_layout.addWidget(cmb_pf)
         text_layout.addLayout(pf_layout)
-        
-        # Target
-        t_layout = QHBoxLayout()
-        t_layout.addWidget(QLabel("Target:"))
-        self.cmb_target = QComboBox()
-        self.cmb_target.addItem("<Active Window>")
-        self.target_window_var.attach(self.cmb_target)
-        t_layout.addWidget(self.cmb_target, 1)
-        btn_refresh_t = QPushButton("↻")
-        btn_refresh_t.setFixedWidth(24)
-        btn_refresh_t.clicked.connect(self.manual_scan_windows)
-        t_layout.addWidget(btn_refresh_t)
-        text_layout.addLayout(t_layout)
-        
-        foc_layout = QHBoxLayout()
-        chk_foc = QCheckBox("Focus Target")
-        self.focus_target_var.attach(chk_foc)
-        foc_layout.addWidget(chk_foc)
-        btn_foc = QPushButton("Focus Now")
-        btn_foc.clicked.connect(self.manual_focus_target)
-        foc_layout.addWidget(btn_foc)
-        text_layout.addLayout(foc_layout)
         
         text_layout.addStretch()
 
@@ -450,6 +452,30 @@ class Overlay(QMainWindow):
         chk_mat = QCheckBox("Matrix Integration")
         self.matrix_mode_var.attach(chk_mat, self.toggle_matrix_ui)
         conn_layout.addWidget(chk_mat)
+        
+        chk_tg = QCheckBox("Telegram Bot")
+        self.telegram_mode_var.attach(chk_tg, self.toggle_telegram_ui)
+        conn_layout.addWidget(chk_tg)
+        
+        # Telegram Configuration Frame
+        self.telegram_frame = QWidget()
+        tg_layout = QVBoxLayout(self.telegram_frame)
+        tg_layout.setContentsMargins(0,0,0,0)
+        
+        tg_row = QHBoxLayout()
+        tg_row.addWidget(QLabel("Token:"))
+        self.txt_tg_token = QLineEdit()
+        self.telegram_token_var.attach(self.txt_tg_token)
+        self.txt_tg_token.setEchoMode(QLineEdit.EchoMode.Password)
+        tg_row.addWidget(self.txt_tg_token)
+        tg_layout.addLayout(tg_row)
+        
+        btn_tg_con = QPushButton("Connect Telegram")
+        btn_tg_con.clicked.connect(self.connect_telegram)
+        tg_layout.addWidget(btn_tg_con)
+        
+        conn_layout.addWidget(self.telegram_frame)
+        self.telegram_frame.setVisible(False)
         
         # Matrix Configuration Frame (Embedded)
         self.matrix_frame = QWidget()
@@ -562,6 +588,12 @@ class Overlay(QMainWindow):
         
     def toggle_matrix_ui(self):
         self.matrix_frame.setVisible(self.matrix_mode_var.get())
+
+    def toggle_telegram_ui(self):
+        self.telegram_frame.setVisible(self.telegram_mode_var.get())
+
+    def connect_telegram(self):
+        self.queue.put(("telegram_connect", self.telegram_token_var.get()))
 
     # Lists
     def update_rec_list(self, items, select_index=None):

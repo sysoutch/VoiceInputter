@@ -51,9 +51,13 @@ class AudioManager:
         try:
             devices = sd.query_devices()
             input_devices = []
+            seen_names = set()
             for i, d in enumerate(devices):
                 if d['max_input_channels'] > 0:
-                    input_devices.append((i, d['name']))
+                    # De-duplicate by name to avoid showing same device across multiple APIs
+                    if d['name'] not in seen_names:
+                        input_devices.append((i, d['name']))
+                        seen_names.add(d['name'])
             return input_devices
         except Exception as e:
             self.logger.error(f"Error querying devices: {e}")

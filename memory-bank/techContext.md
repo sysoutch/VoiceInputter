@@ -2,12 +2,16 @@
 
 ## Technologies Used
 - **Language:** Python 3.12.
-- **Runtime:** Standard Python Interpreter.
-- **GUI:** **PyQt6** (Native Qt bindings).
+- **GUI:** PyQt6 (Native Qt bindings).
 - **Backend:** ComfyUI (Local API).
 - **Audio:** `sounddevice` (PortAudio wrapper) + `numpy`.
+- **Audio Processing:** `pydub` (used for Telegram audio conversion).
 - **Keyboard:** `pynput` (Hotkeys) + `pyautogui` (Typing).
-- **Networking:** `matrix-nio` (Matrix protocol) + `requests` (Client) + `http.server` (Server) + `socket` (Discovery) + `websocket-client` (ComfyUI).
+- **Networking:** 
+    - `python-telegram-bot` (Telegram integration).
+    - `matrix-nio` (Matrix integration).
+    - `requests` (Client) + `http.server` (Server) + `socket` (Discovery).
+    - `websocket-client` (ComfyUI communication).
 
 ## Development Setup
 - **OS:** Windows 11.
@@ -15,19 +19,20 @@
 - **Version Control:** Git.
 
 ## Technical Constraints
-- **Threading:** PyQt6 event loop must run in the main thread. All other tasks (Audio, Keyboard, Network, Matrix) run in background threads/loops and communicate via a central `queue.Queue`.
-- **Audio Stream:** A single persistent `sounddevice.InputStream` is used to avoid initialization latency and conflicts.
-- **ComfyUI:** Requires specific node classes ("Apply Whisper", "Preview Text") to be present in the workflow.
-- **Network Mode:** Requires machines to be on the same subnet for UDP broadcast discovery.
-- **High DPI:** PyQt6 automatically handles DPI awareness, but may trigger OS-level warnings on some systems.
+- **Threading:** PyQt6 event loop must run in the main thread. All background services (Audio, Keyboard, Network, Matrix, Telegram) communicate via a central thread-safe `queue`.
+- **Audio Formats:** Local capture uses RAW/WAV; Telegram integration performs runtime conversion from OGG/Opus to WAV via `pydub`.
+- **Startup:** Blocking discovery calls must be performed in background threads to maintain UI responsiveness.
+- **High DPI:** Handled natively by PyQt6.
 
 ## Dependencies
 - `PyQt6` (GUI)
-- `matrix-nio` (Matrix integration)
-- `requests`
-- `websocket-client`
+- `python-telegram-bot` (Telegram)
+- `matrix-nio` (Matrix)
+- `pydub` (Audio conversion)
 - `sounddevice`
 - `numpy`
+- `requests`
+- `websocket-client`
 - `pynput`
 - `pyautogui`
 - `pyperclip`

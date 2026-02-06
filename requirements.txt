@@ -11,3 +11,5 @@ packaging
 pillow
 matrix-nio
 PyQt6
+python-telegram-bot
+pydub

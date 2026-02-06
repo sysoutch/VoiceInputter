@@ -18,6 +18,7 @@ from src.audio import AudioManager
 from src.comfy import ComfyClient
 from src.network import NetworkManager
 from src.matrix_client import MatrixManager
+from src.telegram_client import TelegramManager
 
 # Logging Setup
 logging.basicConfig(
@@ -50,6 +51,9 @@ class VoiceInputterApp:
         self.matrix_bot = MatrixManager(logger, "BotClient")    # Bot Client (Replier)
         self.matrix_bot.register_callback(self.on_matrix_message)
         
+        self.telegram = TelegramManager(logger)
+        self.telegram.register_callback(self.on_telegram_message)
+        
         self.active_window_handle = None
         self.current_keys = set()
         self.mic_devices = []
@@ -72,8 +76,10 @@ class VoiceInputterApp:
                     
                     if isinstance(task, dict) and task.get('type') == 'bot_audio':
                         filename = task['file']
-                        room_id = task['room']
-                        logger.info(f"Bot processing audio: {filename}")
+                        source_type = task.get('source', 'matrix')
+                        room_or_chat_id = task['id']
+                        
+                        logger.info(f"Bot processing audio from {source_type}: {filename}")
                         
                         from src.config import INPUT_FILENAME
                         try:
@@ -82,7 +88,10 @@ class VoiceInputterApp:
                             text = self.comfy.process(None, SAMPLE_RATE, language=lang)
                             if text:
                                 logger.info(f"Bot Result: {text}")
-                                self.matrix_bot.send_text(room_id, text)
+                                if source_type == 'matrix':
+                                    self.matrix_bot.send_text(room_or_chat_id, text)
+                                elif source_type == 'telegram':
+                                    self.telegram.send_text(room_or_chat_id, text)
                         except Exception as e:
                             logger.error(f"Bot processing error: {e}")
                             
@@ -350,6 +359,9 @@ class VoiceInputterApp:
     def on_matrix_message(self, msg_type, content, room_id):
         self.queue.put(("matrix_message", msg_type, content, room_id))
 
+    def on_telegram_message(self, msg_type, content, chat_id):
+        self.queue.put(("telegram_message", msg_type, content, chat_id))
+
     def coordinator_loop(self):
         try:
             while True:
@@ -452,6 +464,55 @@ class VoiceInputterApp:
                         
                         logger.info(f"Hotkey updated to: {self.target_hotkey_sequence}")
                         
+                    elif cmd == "matrix_connect":
+                        # msg = ("matrix_connect", u_serv, u_user, u_tok, b_serv, b_user, b_tok)
+                        try:
+                            # User Client
+                            if msg[1] and msg[2] and msg[3]:
+                                self.matrix_client.connect(msg[1], msg[2], msg[3])
+                            
+                            # Bot Client
+                            if len(msg) > 6 and msg[4] and msg[5] and msg[6]:
+                                self.matrix_bot.connect(msg[4], msg[5], msg[6])
+                        except Exception as e:
+                            logger.error(f"Matrix connect dispatch error: {e}")
+                    
+                    elif cmd == "telegram_connect":
+                        try:
+                            if msg[1]: self.telegram.connect(msg[1])
+                        except Exception as e:
+                            logger.error(f"Telegram connect dispatch error: {e}")
+
+                    elif cmd == "matrix_message":
+                        msg_type, content, room_id = msg[1], msg[2], msg[3]
+                        if msg_type == "text":
+                            logger.info(f"Matrix Text Received: {content}")
+                            self.gui.append_text(f"[Matrix]: {content}")
+                            
+                            # Type the text if Auto-Send is enabled
+                            if self.gui.auto_send_var.get():
+                                # For remote messages, do not use the stale active window handle from previous local recordings
+                                self.send_text_to_window(content, use_stale_handle=False)
+                                
+                        elif msg_type == "audio":
+                            logger.info(f"Matrix Audio Received: {content}")
+                            self.processing_tasks_count += 1
+                            self.gui.set_processing_state(True)
+                            self.processing_queue.put({"type": "bot_audio", "source": "matrix", "file": content, "id": room_id})
+                    
+                    elif cmd == "telegram_message":
+                        msg_type, content, chat_id = msg[1], msg[2], msg[3]
+                        if msg_type == "text":
+                            logger.info(f"Telegram Text Received: {content}")
+                            self.gui.append_text(f"[Telegram]: {content}")
+                            if self.gui.auto_send_var.get():
+                                self.send_text_to_window(content, use_stale_handle=False)
+                        elif msg_type == "audio":
+                            logger.info(f"Telegram Audio Received: {content}")
+                            self.processing_tasks_count += 1
+                            self.gui.set_processing_state(True)
+                            self.processing_queue.put({"type": "bot_audio", "source": "telegram", "file": content, "id": chat_id})
+                
                     elif cmd == "processing_complete":
                         if self.processing_tasks_count > 0:
                             self.processing_tasks_count -= 1
@@ -468,36 +529,6 @@ class VoiceInputterApp:
                         except Exception as e:
                             logger.error(f"Set mic error: {e}")
 
-                    elif cmd == "matrix_connect":
-                        # msg = ("matrix_connect", u_serv, u_user, u_tok, b_serv, b_user, b_tok)
-                        try:
-                            # User Client
-                            if msg[1] and msg[2] and msg[3]:
-                                self.matrix_client.connect(msg[1], msg[2], msg[3])
-                            
-                            # Bot Client
-                            if len(msg) > 6 and msg[4] and msg[5] and msg[6]:
-                                self.matrix_bot.connect(msg[4], msg[5], msg[6])
-                        except Exception as e:
-                            logger.error(f"Matrix connect dispatch error: {e}")
-                    
-                    elif cmd == "matrix_message":
-                        msg_type, content, room_id = msg[1], msg[2], msg[3]
-                        if msg_type == "text":
-                            logger.info(f"Matrix Text Received: {content}")
-                            self.gui.append_text(f"[Matrix]: {content}")
-                            
-                            # Type the text if Auto-Send is enabled
-                            if self.gui.auto_send_var.get():
-                                # For remote messages, do not use the stale active window handle from previous local recordings
-                                self.send_text_to_window(content, use_stale_handle=False)
-                                
-                        elif msg_type == "audio":
-                            logger.info(f"Matrix Audio Received: {content}")
-                            self.processing_tasks_count += 1
-                            self.gui.set_processing_state(True)
-                            self.processing_queue.put({"type": "bot_audio", "file": content, "room": room_id})
-                
                 elif msg == "toggle":
                     if self.audio.state == "READY":
                         self.audio.trigger_start()
@@ -581,6 +612,7 @@ class VoiceInputterApp:
                     self.audio.stop()
                     self.matrix_client.stop()
                     self.matrix_bot.stop()
+                    self.telegram.stop()
                     os._exit(0)
 
         except Exception as e:
