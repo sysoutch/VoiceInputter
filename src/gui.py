@@ -226,6 +226,12 @@ class Overlay(QMainWindow):
         self.lbl_status.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.container_layout.addWidget(self.lbl_status)
+
+        self.lbl_error = QLabel("")
+        self.lbl_error.setWordWrap(True)
+        self.lbl_error.setStyleSheet("color: #ff8a80;")
+        self.lbl_error.hide()
+        self.container_layout.addWidget(self.lbl_error)
         
         # --- Main Action ---
         self.btn_record = QPushButton("RECORD")
@@ -336,6 +342,13 @@ class Overlay(QMainWindow):
         chk_proc = QCheckBox("Auto-Process")
         self.auto_process_var.attach(chk_proc)
         gen_layout.addWidget(chk_proc)
+
+        backend_layout = QHBoxLayout()
+        backend_layout.addWidget(QLabel("Transcription:"))
+        self.cmb_backend = QComboBox()
+        self.cmb_backend.addItems(["ComfyUI", "Whisper (local)"])
+        backend_layout.addWidget(self.cmb_backend, 1)
+        gen_layout.addLayout(backend_layout)
 
         # Language Selection
         lang_layout = QHBoxLayout()

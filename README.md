@@ -30,12 +30,12 @@ VoiceInputter is a professional Windows tool that turns your voice into text and
 
 ### 1. Requirements
 - **Windows 10/11**
-- **ComfyUI** running locally (or on a network machine) on port `8188`.
-- A ComfyUI workflow saved as `stt.json` in the app directory.
+- Choose either **ComfyUI** on port `8188` with the included `stt.json` workflow, or **Whisper (local)** in the General tab.
+- Local Whisper uses the `base` model on the CPU. The model is downloaded on first use, so that first transcription requires an internet connection and can take longer.
 
 ### 2. Getting Started
 1.  Download the latest `voice_inputter.exe`.
-2.  Ensure your ComfyUI instance is running.
+2.  Select the transcription backend in the **General** tab. If using ComfyUI, ensure it is running.
 3.  Launch the app and configure your preferred hotkey in the **Hotkeys** tab.
 4.  Select your target application and start speaking!
 
@@ -67,6 +67,7 @@ pyinstaller --onefile --windowed --add-data "stt.json;." voice_inputter.py
 ### Project Structure
 - `src/gui.py`: Responsive PyQt6 interface with modal hotkey capturing.
 - `src/comfy.py`: API client with dynamic language discovery and injection.
+- `src/whisper_backend.py`: Local faster-whisper transcription backend.
 - `src/telegram_client.py` & `src/matrix_client.py`: Remote protocol integrations.
 - `src/audio.py`: Low-latency capture with VAD and device de-duplication.
 - `voice_inputter.py`: Multi-threaded coordinator and sequence detection logic.

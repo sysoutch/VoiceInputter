@@ -13,3 +13,5 @@ matrix-nio
 PyQt6
 python-telegram-bot
 pydub
+faster-whisper
+av>=11,<18

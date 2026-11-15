@@ -16,6 +16,7 @@ from src.config import HOTKEY, SAMPLE_RATE
 from src.gui import Overlay
 from src.audio import AudioManager
 from src.comfy import ComfyClient
+from src.whisper_backend import WhisperBackend, TranscriptionBackend
 from src.network import NetworkManager
 from src.matrix_client import MatrixManager
 from src.telegram_client import TelegramManager
@@ -46,7 +47,9 @@ class VoiceInputterApp:
         self.gui = Overlay(self.queue)
         self.audio = AudioManager(self.queue, logger)
         self.comfy = ComfyClient(logger, self.client_id)
-        self.network = NetworkManager(self.comfy, logger)
+        self.transcriber = TranscriptionBackend(self.comfy, WhisperBackend(logger))
+        self.gui.cmb_backend.currentTextChanged.connect(self.set_backend)
+        self.network = NetworkManager(self.transcriber, logger)
         self.matrix_client = MatrixManager(logger, "UserClient") # User Client (Sender)
         self.matrix_bot = MatrixManager(logger, "BotClient")    # Bot Client (Replier)
         self.matrix_bot.register_callback(self.on_matrix_message)
@@ -85,7 +88,7 @@ class VoiceInputterApp:
                         try:
                             shutil.copy(filename, INPUT_FILENAME)
                             lang = self.gui.language_var.get()
-                            text = self.comfy.process(None, SAMPLE_RATE, language=lang)
+                            text = self.transcriber.process(None, SAMPLE_RATE, language=lang)
                             if text:
                                 logger.info(f"Bot Result: {text}")
                                 if source_type == 'matrix':
@@ -341,9 +344,13 @@ class VoiceInputterApp:
             try:
                 shutil.copy(filename, INPUT_FILENAME)
                 lang = self.gui.language_var.get()
-                text = self.comfy.process(None, SAMPLE_RATE, language=lang)
+                text = self.transcriber.process(None, SAMPLE_RATE, language=lang)
+                if not text:
+                    detail = self.transcriber.last_error or "No text returned. Check the selected backend and audio."
+                    self.queue.put(("transcription_error", detail))
             except Exception as e:
                 logger.error(f"Local processing error: {e}")
+                self.queue.put(("transcription_error", str(e)))
         
         if text:
             if rec.get('deleted', False): return
@@ -421,7 +428,8 @@ class VoiceInputterApp:
                         self.gui.update_text(msg[1])
                     
                     elif cmd == "update_languages":
-                        self.gui.update_languages(msg[1])
+                        if self.transcriber.selected == "ComfyUI":
+                            self.gui.update_languages(msg[1])
                     
                     elif cmd == "update_hotkey_display":
                         self.gui.update_hotkey_display(msg[1])
@@ -518,6 +526,10 @@ class VoiceInputterApp:
                             self.processing_tasks_count -= 1
                         self.gui.set_processing_state(self.processing_tasks_count > 0)
 
+                    elif cmd == "transcription_error":
+                        self.gui.lbl_error.setText("Transcription failed: " + msg[1])
+                        self.gui.lbl_error.show()
+
                     elif cmd == "set_mic":
                         try:
                             selection_idx = msg[1]
@@ -549,6 +561,7 @@ class VoiceInputterApp:
                         should_send = self.gui.auto_process_var.get()
                         
                         if should_send:
+                            self.gui.lbl_error.hide()
                             self.processing_tasks_count += 1
                             self.gui.set_processing_state(True)
                             self.processing_queue.put((rec, True))
@@ -557,6 +570,7 @@ class VoiceInputterApp:
 
                 elif msg == "manual_process":
                     if self.recordings:
+                        self.gui.lbl_error.hide()
                         self.processing_tasks_count += len(self.recordings)
                         self.gui.set_processing_state(True)
                         for rec in self.recordings:
@@ -688,6 +702,16 @@ class VoiceInputterApp:
             self.gui.root.mainloop()
         except KeyboardInterrupt:
             pass
+
+    def set_backend(self, name):
+        self.transcriber.selected = name
+        if name == "Whisper (local)":
+            self.gui.update_languages(["auto", "English", "German", "French", "Italian", "Spanish", "Japanese", "Chinese"])
+        else:
+            threading.Thread(target=self.scan_languages, daemon=True).start()
+
+    def scan_languages(self):
+        self.queue.put(("update_languages", self.comfy.get_languages()))
 
     def initial_scans(self):
         self.queue.put("scan_mics")
